@@ -1,13 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "iza-olgax",
-  "main": ".open-next/worker.js",
+  "name": "izah-pos",
+  "pages_build_output_dir": ".open-next/assets",
   "compatibility_date": "2024-12-30",
   "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -16,7 +12,7 @@
     }
   ],
   "vars": {
-    "BETTER_AUTH_URL": "https://iza-olgax.workers.dev",
-    "NEXT_PUBLIC_APP_URL": "https://iza-olgax.workers.dev"
+    "BETTER_AUTH_URL": "https://izah-pos.pages.dev",
+    "NEXT_PUBLIC_APP_URL": "https://izah-pos.pages.dev"
   }
 }
