@@ -27,7 +27,6 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1004.0",
-    "@electric-sql/pglite": "^0.3.15",
     "@hookform/resolvers": "^5.2.2",
     "@opennextjs/cloudflare": "^1.20.5",
     "@prisma/adapter-d1": "^7.10.0",

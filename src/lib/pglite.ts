@@ -1,53 +1,59 @@
 /**
- * PGLite singleton — browser-embedded Postgres stored in IndexedDB.
- * Used for offline-capable reads/writes in the POS.
+ * Lightweight browser IndexedDB offline cache for the POS.
+ * Replaces heavy WASM engines with 100% native browser storage (0 bundle overhead).
  *
  * Import this only in client components or hooks (never in server code).
  */
 
-import type { PGlite } from "@electric-sql/pglite";
+const DB_NAME = "izah-pos-offline";
+const DB_VERSION = 1;
 
-let instance: PGlite | null = null;
-let initPromise: Promise<PGlite> | null = null;
+interface SyncQueueItem {
+  id?: number;
+  endpoint: string;
+  method: string;
+  payload: unknown;
+  synced: boolean;
+  createdAt: number;
+}
 
-export async function getPGlite(): Promise<PGlite> {
-  if (instance) return instance;
-  if (initPromise) return initPromise;
+interface ProductCacheItem {
+  id: string;
+  name: string;
+  sku?: string | null;
+  barcode?: string | null;
+  price: number;
+  stock: number;
+  category?: string | null;
+  updatedAt: number;
+}
 
-  initPromise = (async () => {
-    // Dynamic import keeps the heavy WASM out of the server bundle
-    const { PGlite } = await import("@electric-sql/pglite");
-    const db = new PGlite("idb://izah-pos");
+function openDB(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    if (typeof window === "undefined" || !window.indexedDB) {
+      return reject(new Error("IndexedDB is only available in browser environment"));
+    }
 
-    // Bootstrap local schema (sync_queue + products cache)
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS sync_queue (
-        id         SERIAL PRIMARY KEY,
-        endpoint   TEXT    NOT NULL,
-        method     TEXT    NOT NULL DEFAULT 'POST',
-        payload    JSONB   NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        attempts   INT     NOT NULL DEFAULT 0,
-        synced     BOOLEAN NOT NULL DEFAULT FALSE
-      );
+    const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
-      CREATE TABLE IF NOT EXISTS products_cache (
-        id          TEXT PRIMARY KEY,
-        name        TEXT NOT NULL,
-        sku         TEXT,
-        barcode     TEXT,
-        price       NUMERIC NOT NULL,
-        stock       INT  NOT NULL DEFAULT 0,
-        category    TEXT,
-        updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains("sync_queue")) {
+        const queueStore = db.createObjectStore("sync_queue", {
+          keyPath: "id",
+          autoIncrement: true,
+        });
+        queueStore.createIndex("synced", "synced", { unique: false });
+      }
 
-    instance = db;
-    return db;
-  })();
+      if (!db.objectStoreNames.contains("products_cache")) {
+        db.createObjectStore("products_cache", { keyPath: "id" });
+      }
+    };
 
-  return initPromise;
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
 }
 
 /** Enqueue an offline write to be replayed when back online. */
@@ -56,36 +62,70 @@ export async function enqueueOfflineWrite(
   method: string,
   payload: unknown
 ): Promise<void> {
-  const db = await getPGlite();
-  await db.query(
-    `INSERT INTO sync_queue (endpoint, method, payload) VALUES ($1, $2, $3)`,
-    [endpoint, method, JSON.stringify(payload)]
-  );
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("sync_queue", "readwrite");
+    const store = tx.objectStore("sync_queue");
+    const item: SyncQueueItem = {
+      endpoint,
+      method,
+      payload,
+      synced: false,
+      createdAt: Date.now(),
+    };
+    const req = store.add(item);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
 }
 
 /** Return all pending (unsynced) items in the queue. */
 export async function getPendingQueue(): Promise<
   { id: number; endpoint: string; method: string; payload: unknown }[]
 > {
-  const db = await getPGlite();
-  const result = await db.query<{
-    id: number;
-    endpoint: string;
-    method: string;
-    payload: unknown;
-  }>(
-    `SELECT id, endpoint, method, payload FROM sync_queue WHERE synced = FALSE ORDER BY id ASC`
-  );
-  return result.rows;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("sync_queue", "readonly");
+    const store = tx.objectStore("sync_queue");
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const items: SyncQueueItem[] = req.result || [];
+      const pending = items
+        .filter((i) => !i.synced)
+        .map((i) => ({
+          id: i.id!,
+          endpoint: i.endpoint,
+          method: i.method,
+          payload: i.payload,
+        }));
+      resolve(pending);
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
 
 /** Mark a queued item as synced. */
 export async function markSynced(id: number): Promise<void> {
-  const db = await getPGlite();
-  await db.query(`UPDATE sync_queue SET synced = TRUE WHERE id = $1`, [id]);
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("sync_queue", "readwrite");
+    const store = tx.objectStore("sync_queue");
+    const req = store.get(id);
+
+    req.onsuccess = () => {
+      const item = req.result as SyncQueueItem;
+      if (item) {
+        item.synced = true;
+        store.put(item);
+      }
+      resolve();
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
 
-/** Upsert a product into the local cache (used when seeding from server). */
+/** Upsert a product into the local cache. */
 export async function upsertProductCache(product: {
   id: string;
   name: string;
@@ -95,28 +135,18 @@ export async function upsertProductCache(product: {
   stock: number;
   category?: string | null;
 }): Promise<void> {
-  const db = await getPGlite();
-  await db.query(
-    `INSERT INTO products_cache (id, name, sku, barcode, price, stock, category, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-     ON CONFLICT (id) DO UPDATE SET
-       name = EXCLUDED.name,
-       sku  = EXCLUDED.sku,
-       barcode = EXCLUDED.barcode,
-       price = EXCLUDED.price,
-       stock = EXCLUDED.stock,
-       category = EXCLUDED.category,
-       updated_at = NOW()`,
-    [
-      product.id,
-      product.name,
-      product.sku ?? null,
-      product.barcode ?? null,
-      product.price,
-      product.stock,
-      product.category ?? null,
-    ]
-  );
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("products_cache", "readwrite");
+    const store = tx.objectStore("products_cache");
+    const item: ProductCacheItem = {
+      ...product,
+      updatedAt: Date.now(),
+    };
+    const req = store.put(item);
+    req.onsuccess = () => resolve();
+    req.onerror = () => reject(req.error);
+  });
 }
 
 /** Search the local product cache (offline fallback). */
@@ -131,24 +161,36 @@ export async function searchProductsOffline(query: string): Promise<
     category: string | null;
   }[]
 > {
-  const db = await getPGlite();
-  const like = `%${query.toLowerCase()}%`;
-  const result = await db.query<{
-    id: string;
-    name: string;
-    sku: string | null;
-    barcode: string | null;
-    price: number;
-    stock: number;
-    category: string | null;
-  }>(
-    `SELECT id, name, sku, barcode, price, stock, category
-     FROM products_cache
-     WHERE LOWER(name) LIKE $1
-        OR LOWER(COALESCE(sku, '')) LIKE $1
-        OR LOWER(COALESCE(barcode, '')) LIKE $1
-     LIMIT 20`,
-    [like]
-  );
-  return result.rows;
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("products_cache", "readonly");
+    const store = tx.objectStore("products_cache");
+    const req = store.getAll();
+
+    req.onsuccess = () => {
+      const all: ProductCacheItem[] = req.result || [];
+      const q = query.toLowerCase().trim();
+      const filtered = all
+        .filter((p) => {
+          if (!q) return true;
+          return (
+            p.name.toLowerCase().includes(q) ||
+            p.sku?.toLowerCase().includes(q) ||
+            p.barcode?.toLowerCase().includes(q)
+          );
+        })
+        .slice(0, 20)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku ?? null,
+          barcode: p.barcode ?? null,
+          price: p.price,
+          stock: p.stock,
+          category: p.category ?? null,
+        }));
+      resolve(filtered);
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
