@@ -1,35 +1,26 @@
 import { PrismaClient } from "@/generated/prisma/client";
+import { PrismaD1 } from "@prisma/adapter-d1";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 function createPrismaClient(): PrismaClient {
   // 1. Cloudflare Workers / Pages runtime with Cloudflare D1 database binding
   try {
-    const { getCloudflareContext } = require("@opennextjs/cloudflare");
     const cf = getCloudflareContext?.();
     if (cf?.env?.DB) {
-      const { PrismaD1 } = require("@prisma/adapter-d1");
-      const adapter = new PrismaD1(cf.env.DB);
+      const adapter = new PrismaD1(cf.env.DB as any);
       return new PrismaClient({ adapter });
     }
   } catch {
-    // Not running inside Cloudflare Workers
+    // getCloudflareContext throws when not running inside Cloudflare runtime
   }
 
-  // 2. Local dev & Vitest test runner (uses local SQLite file via @prisma/adapter-libsql)
-  try {
-    const { PrismaLibSql } = require("@prisma/adapter-libsql");
-    const url = process.env.DATABASE_URL || "file:./dev.db";
-    const adapter = new PrismaLibSql({ url });
-    return new PrismaClient({
-      adapter,
-      log:
-        process.env.NODE_ENV === "development"
-          ? ["error", "warn"]
-          : ["error"],
-    });
-  } catch (err) {
-    console.error("Failed to initialize database adapter:", err);
-    throw err;
-  }
+  // 2. Local dev / testing fallback
+  return new PrismaClient({
+    log:
+      process.env.NODE_ENV === "development"
+        ? ["error", "warn"]
+        : ["error"],
+  });
 }
 
 const globalForPrisma = globalThis as unknown as {
