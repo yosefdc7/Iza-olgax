@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "izah-pos",
+  "name": "iza-olgax",
   "main": ".open-next/worker.js",
   "compatibility_date": "2024-12-30",
   "compatibility_flags": ["nodejs_compat"],
@@ -16,7 +16,7 @@
     }
   ],
   "vars": {
-    "BETTER_AUTH_URL": "https://izah-pos.workers.dev",
-    "NEXT_PUBLIC_APP_URL": "https://izah-pos.workers.dev"
+    "BETTER_AUTH_URL": "https://iza-olgax.workers.dev",
+    "NEXT_PUBLIC_APP_URL": "https://iza-olgax.workers.dev"
   }
 }
