@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { Client } from "pg";
+import { prisma } from "@/lib/db";
 
 interface SetupStatus {
   envOk: boolean;
@@ -8,59 +8,47 @@ interface SetupStatus {
   hasAdmin: boolean;
   setupComplete: boolean;
   missingEnv: string[];
-  dbError?: string;  // human-readable DB error surfaced to wizard UI
+  dbError?: string; // human-readable DB error surfaced to wizard UI
 }
 
-// Use a raw pg Client (not Prisma) so we never trigger prisma:error log spam
-// during setup probing — Prisma logs at "error" level even for expected failures.
-async function probeDb(url: string): Promise<{
+async function probeDb(): Promise<{
   connected: boolean;
   initialized: boolean;
   hasAdmin: boolean;
   setupComplete: boolean;
   error?: string;
 }> {
-  const client = new Client({ connectionString: url });
   try {
-    await client.connect();
+    const settings = await prisma.businessSettings.findUnique({
+      where: { id: "singleton" },
+      select: { setupComplete: true },
+    });
 
-    // Check if the BusinessSettings table exists (schema init check)
-    const tableCheck = await client.query(
-      `SELECT to_regclass('public."BusinessSettings"') AS tbl`
-    );
-    const initialized = tableCheck.rows[0]?.tbl !== null;
+    const adminCount = await prisma.user.count({
+      where: { role: "ADMIN" },
+    });
 
-    if (!initialized) {
-      return { connected: true, initialized: false, hasAdmin: false, setupComplete: false };
-    }
+    const initialized = !!settings;
+    const setupComplete = settings?.setupComplete === true;
+    const hasAdmin = adminCount > 0;
 
-    const [settingsRes, adminRes] = await Promise.all([
-      client.query(`SELECT "setupComplete" FROM "BusinessSettings" WHERE id = 'singleton' LIMIT 1`),
-      client.query(`SELECT COUNT(*) AS cnt FROM "User" WHERE role = 'ADMIN'`),
-    ]);
-
-    const setupComplete = settingsRes.rows[0]?.setupComplete === true;
-    const hasAdmin = parseInt(String(adminRes.rows[0]?.cnt ?? "0"), 10) > 0;
-
-    return { connected: true, initialized: true, hasAdmin, setupComplete };
-  } catch (err) {
-    const pg = err as { code?: string; message?: string };
-    let friendly = pg.message ?? "Unknown database error";
-    // Map common PG error codes to helpful messages
-    if (pg.code === "28P01") friendly = `Authentication failed — wrong password in DATABASE_URL (code 28P01)`;
-    else if (pg.code === "28000") friendly = `Authentication failed — unknown user or role (code 28000)`;
-    else if (pg.code === "3D000") friendly = `Database does not exist — create it first or check DATABASE_URL (code 3D000)`;
-    else if (pg.code === "ECONNREFUSED") friendly = `Connection refused — is PostgreSQL running? (ECONNREFUSED)`;
-    else if (pg.code === "ETIMEDOUT") friendly = `Connection timed out — check host/port in DATABASE_URL (ETIMEDOUT)`;
-    return { connected: false, initialized: false, hasAdmin: false, setupComplete: false, error: friendly };
-  } finally {
-    await client.end().catch(() => {});
+    return { connected: true, initialized, hasAdmin, setupComplete };
+  } catch (err: any) {
+    const message = err?.message ?? "Database not initialized";
+    return {
+      connected: true,
+      initialized: false,
+      hasAdmin: false,
+      setupComplete: false,
+      error: message,
+    };
   }
 }
 
 export async function GET(): Promise<NextResponse<SetupStatus>> {
   const missingEnv: string[] = [];
-  if (!process.env.DATABASE_URL) missingEnv.push("DATABASE_URL");
+  const hasDb = !!process.env.DATABASE_URL || !!(process.env as any).DB;
+  if (!hasDb) missingEnv.push("DATABASE_URL");
   if (!process.env.BETTER_AUTH_SECRET) missingEnv.push("BETTER_AUTH_SECRET");
 
   const envOk = missingEnv.length === 0;
@@ -75,7 +63,7 @@ export async function GET(): Promise<NextResponse<SetupStatus>> {
     });
   }
 
-  const probe = await probeDb(process.env.DATABASE_URL!);
+  const probe = await probeDb();
 
   const response = NextResponse.json({
     envOk: true,
@@ -89,9 +77,9 @@ export async function GET(): Promise<NextResponse<SetupStatus>> {
 
   if (probe.setupComplete) {
     response.cookies.set("izah-setup-complete", "1", {
-      httpOnly: true, 
+      httpOnly: true,
       sameSite: "lax",
-      maxAge: 31536000, 
+      maxAge: 31536000,
       path: "/",
     });
   }
