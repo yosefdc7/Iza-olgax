@@ -13,7 +13,7 @@ const DEMO_RECEIPT = {
     paymentMethod: "CASH",
   },
   settings: {
-    name: "OLGAX POS",
+    name: "IZAH POS",
     currency: "$",
     currencyDecimals: 2,
     taxName: "Tax",

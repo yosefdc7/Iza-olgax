@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   const q = req.nextUrl.searchParams.get("q") ?? "";
   const suppliers = await prisma.supplier.findMany({
-    where: q ? { name: { contains: q, mode: "insensitive" } } : undefined,
+    where: q ? { name: { contains: q } } : undefined,
     orderBy: { name: "asc" },
     include: { _count: { select: { products: true } } },
   });

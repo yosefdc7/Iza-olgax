@@ -5,34 +5,15 @@ import { headers } from "next/headers";
 import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-
-// ---- Schemas ----
-
-const createUserSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
-  role: z.enum(["ADMIN", "CASHIER"]),
-});
-
-const updateUserSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
-  email: z.string().email("Invalid email").optional(),
-  role: z.enum(["ADMIN", "CASHIER"]).optional(),
-});
-
-const updateProfileSchema = z.object({
-  name: z.string().min(1, "Name is required").optional(),
-  email: z.string().email("Invalid email").optional(),
-});
-
-const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .refine((pwd) => pwd !== "", "New password is required"),
-});
+import { hashPin, verifyPin, isValidPinFormat } from "@/lib/pin-auth";
+import { createPosCashierSession } from "@/lib/session-auth";
+import {
+  createUserSchema,
+  updateUserSchema,
+  updateProfileSchema,
+  changePasswordSchema,
+  updatePinSchema,
+} from "@/lib/user-schemas";
 
 // ---- Helper: Check Admin Authorization ----
 
@@ -60,26 +41,24 @@ export async function createUserAction(data: z.infer<typeof createUserSchema>) {
     return { error: parsed.error.flatten().fieldErrors };
   }
 
-  const { name, email, password, role } = parsed.data;
+  const { name, email, password, role, pin } = parsed.data;
 
   try {
-    // Check if user already exists
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       return { error: "User with this email already exists" };
     }
 
-    // Call Better Auth server-side API to create user.
-    // In Better Auth v1, auth.api is typed dynamically based on plugins.
-    // If TypeScript fails to resolve the types, cast to any is avoided by using standard call.
     await auth.api.signUpEmail({
       body: { name, email, password },
     });
 
-    // Update user role
     const user = await prisma.user.update({
       where: { email },
-      data: { role },
+      data: {
+        role,
+        pin: pin && pin.trim() !== "" ? hashPin(pin.trim()) : null,
+      },
       select: {
         id: true,
         email: true,
@@ -111,12 +90,10 @@ export async function updateUserAction(id: string, data: z.infer<typeof updateUs
   const updates = parsed.data;
 
   try {
-    // Prevent self-demotion from admin
     if (updates.role && updates.role !== "ADMIN" && session.user.id === id) {
       return { error: "Cannot demote yourself from admin role" };
     }
 
-    // If changing email, check for duplicates
     if (updates.email) {
       const existingUser = await prisma.user.findFirst({
         where: {
@@ -130,13 +107,23 @@ export async function updateUserAction(id: string, data: z.infer<typeof updateUs
       }
     }
 
+    const updateData: {
+      name?: string;
+      email?: string;
+      role?: "ADMIN" | "CASHIER";
+      pin?: string | null;
+    } = {};
+
+    if (updates.name) updateData.name = updates.name;
+    if (updates.email) updateData.email = updates.email;
+    if (updates.role) updateData.role = updates.role;
+    if (updates.pin !== undefined) {
+      updateData.pin = updates.pin && updates.pin.trim() !== "" ? hashPin(updates.pin.trim()) : null;
+    }
+
     const user = await prisma.user.update({
       where: { id },
-      data: {
-        ...(updates.name && { name: updates.name }),
-        ...(updates.email && { email: updates.email }),
-        ...(updates.role && { role: updates.role }),
-      },
+      data: updateData,
     });
 
     revalidatePath("/settings/users");
@@ -149,25 +136,21 @@ export async function updateUserAction(id: string, data: z.infer<typeof updateUs
 
 /**
  * Deletes a user (Admin only).
- * Checks for historical transaction records to maintain audit safety.
  */
 export async function deleteUserAction(id: string) {
   const session = await checkAdminAuth();
 
   try {
-    // Prevent self-deletion
     if (id === session.user.id) {
       return { error: "Cannot delete your own account" };
     }
 
-    // Prevent deleting the last admin
     const adminCount = await prisma.user.count({ where: { role: "ADMIN" } });
     const targetUser = await prisma.user.findUnique({ where: { id } });
     if (targetUser?.role === "ADMIN" && adminCount === 1) {
       return { error: "Cannot delete the last admin account" };
     }
 
-    // DB Audit Safety: Check if user has associated historical sales, refunds, or stock adjustments
     const [salesCount, refundsCount, adjustmentsCount] = await Promise.all([
       prisma.sale.count({ where: { userId: id } }),
       prisma.refund.count({ where: { userId: id } }),
@@ -207,7 +190,6 @@ export async function updateProfileAction(data: z.infer<typeof updateProfileSche
   const { name, email } = parsed.data;
 
   try {
-    // Update user profile using Better Auth server-side API so that session/cookie cache is updated
     await auth.api.updateUser({
       body: {
         ...(name && { name }),
@@ -263,5 +245,108 @@ export async function changePasswordAction(data: z.infer<typeof changePasswordSc
   } catch (err) {
     console.error("Change password action error:", err);
     return { error: err instanceof Error ? err.message : "Failed to change password" };
+  }
+}
+
+/**
+ * Updates the current user's 4-digit PIN
+ */
+export async function updateOwnPinAction(pin: string) {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session?.user) {
+    return { error: "Unauthorized: Please log in" };
+  }
+
+  const parsed = updatePinSchema.safeParse({ pin });
+  if (!parsed.success) {
+    return { error: "PIN must be exactly 4 numeric digits" };
+  }
+
+  try {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: { pin: hashPin(parsed.data.pin) },
+    });
+
+    revalidatePath("/settings/profile");
+    return { success: true, message: "4-Digit PIN updated successfully" };
+  } catch (err) {
+    console.error("Update PIN error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to update PIN" };
+  }
+}
+
+/**
+ * Returns the list of active cashiers and admins for POS lock/unlock switching.
+ */
+export async function getPosCashiersAction() {
+  const session = await auth.api.getSession({ headers: await headers() }).catch(() => null);
+
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        pin: true,
+      },
+      orderBy: { name: "asc" },
+    });
+
+    return {
+      users: users.map((u) => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        hasPin: Boolean(u.pin),
+      })),
+      currentUserId: session?.user?.id ?? null,
+    };
+  } catch (err) {
+    console.error("Get POS cashiers error:", err);
+    return { error: "Failed to fetch cashiers" };
+  }
+}
+
+/**
+ * Verifies a 4-digit PIN for the chosen cashier and switches the active session to that user.
+ */
+export async function verifyAndSwitchCashierPinAction(userId: string, pin: string) {
+  if (!isValidPinFormat(pin)) {
+    return { error: "PIN must be exactly 4 numeric digits" };
+  }
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, email: true, role: true, pin: true },
+    });
+
+    if (!user) {
+      return { error: "User not found" };
+    }
+
+    if (!user.pin) {
+      return { error: "No PIN is set for this cashier. Please log in with password." };
+    }
+
+    const isMatch = verifyPin(pin, user.pin);
+    if (!isMatch) {
+      return { error: "Incorrect PIN. Please try again." };
+    }
+
+    await createPosCashierSession(user.id);
+
+    revalidatePath("/pos");
+    revalidatePath("/(app)", "layout");
+    return {
+      success: true,
+      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+    };
+  } catch (err) {
+    console.error("Verify and switch cashier PIN error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to switch cashier" };
   }
 }

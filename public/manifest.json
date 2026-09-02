@@ -1,6 +1,6 @@
 {
-  "name": "Olgax POS",
-  "short_name": "Olgax POS",
+  "name": "Izah POS",
+  "short_name": "Izah POS",
   "description": "Open-source offline-capable Point of Sale for small businesses",
   "start_url": "/pos",
   "display": "standalone",

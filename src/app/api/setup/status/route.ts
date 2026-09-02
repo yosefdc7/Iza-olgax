@@ -88,7 +88,7 @@ export async function GET(): Promise<NextResponse<SetupStatus>> {
   });
 
   if (probe.setupComplete) {
-    response.cookies.set("olgax-setup-complete", "1", {
+    response.cookies.set("izah-setup-complete", "1", {
       httpOnly: true, 
       sameSite: "lax",
       maxAge: 31536000, 

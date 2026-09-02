@@ -61,6 +61,7 @@ export default async function SettingsPage() {
         storageAccessKey: settings.storageAccessKey,
         hasStorageSecretKey: !!settings.storageSecretKey,
         storagePublicUrl: settings.storagePublicUrl,
+        posAutoLockMinutes: settings.posAutoLockMinutes ?? 0,
       }} />
       <hr />
       <DeviceSettingsForm />

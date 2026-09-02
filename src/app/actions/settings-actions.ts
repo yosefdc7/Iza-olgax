@@ -22,6 +22,7 @@ export async function updateSettings(formData: FormData) {
     loyaltyEarnRate: parseFloat(raw.loyaltyEarnRate as string) || 1,
     loyaltyRedeemValue: parseFloat(raw.loyaltyRedeemValue as string) || 100,
     lowStockThreshold: parseInt(raw.lowStockThreshold as string, 10) || 5,
+    posAutoLockMinutes: parseInt(raw.posAutoLockMinutes as string, 10) || 0,
     // Storage
     storageProvider: (raw.storageProvider as string) || "local",
     storageRegion: (raw.storageRegion as string) || null,

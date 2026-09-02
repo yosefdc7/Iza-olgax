@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useTranslations } from "next-intl";
-import { RotateCcw } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { RotateCcw, ChevronDown, ChevronRight, Receipt } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
 import { RefundModal } from "./refund-modal";
 
 interface SaleItem {
@@ -47,131 +47,168 @@ export function SalesTable({ sales }: SalesTableProps) {
 
   if (sales.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-lg border border-dashed text-muted-foreground text-sm">
-        {t("no_sales")}
+      <div className="flex flex-col h-48 items-center justify-center rounded-lg border border-dashed border-border/80 text-muted-foreground text-sm bg-card/40 p-6 text-center">
+        <Receipt className="h-8 w-8 text-muted-foreground/40 mb-2" />
+        <p className="font-semibold text-foreground/70">{t("no_sales")}</p>
       </div>
     );
   }
 
   return (
     <>
-      <div className="rounded-lg border overflow-x-auto text-sm">
-      <table className="w-full">
-        <thead className="border-b bg-muted/50">
-          <tr>
-            <th className="px-4 py-3 text-left font-medium">{t("date")}</th>
-            <th className="px-4 py-3 text-left font-medium">{t("cashier")}</th>
-            <th className="px-4 py-3 text-left font-medium">{t("payment")}</th>
-            <th className="px-4 py-3 text-left font-medium">{t("status")}</th>
-            <th className="px-4 py-3 text-right font-medium">{t("total")}</th>
-            <th className="px-4 py-3 text-center font-medium">{t("actions")}</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {sales.flatMap((sale, idx) => {
-            const saleTimestamp = new Date(sale.createdAt).getTime();
-            const saleKey = `${sale.id ?? "no-id"}-${saleTimestamp}-${idx}`;
+      <div className="rounded-lg border border-border/80 bg-card overflow-hidden shadow-xs">
+        <div className="overflow-x-auto text-sm">
+          <table className="w-full text-left">
+            <thead className="border-b border-border/80 bg-muted/40">
+              <tr>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                  {t("date")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                  {t("cashier")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                  {t("payment")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90">
+                  {t("status")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90 text-right">
+                  {t("total")}
+                </th>
+                <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/90 text-center">
+                  {t("actions")}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border/60">
+              {sales.flatMap((sale, idx) => {
+                const saleTimestamp = new Date(sale.createdAt).getTime();
+                const saleKey = `${sale.id ?? "no-id"}-${saleTimestamp}-${idx}`;
+                const isExpanded = expanded === sale.id;
 
-            const mainRow = (
-              <tr
-                key={`${saleKey}-main`}
-                className="hover:bg-muted/30 cursor-pointer transition-colors"
-                onClick={() => setExpanded(expanded === sale.id ? null : sale.id)}
-              >
-                <td className="px-4 py-3">
-                  {saleDateFormatter.format(new Date(sale.createdAt))}
-                </td>
-                <td className="px-4 py-3 text-muted-foreground">{sale.user?.name ?? "—"}</td>
-                <td className="px-4 py-3">{sale.paymentMethod}</td>
-                <td className="px-4 py-3">
-                  <span
-                    className={
-                      sale.status === "VOIDED"
-                        ? "text-destructive"
-                        : "text-green-600"
-                    }
-                  >
-                    {sale.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-right font-medium">
-                  {formatCurrency(parseFloat(sale.total.toString()))}
-                </td>
-                <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
-                  <div className="flex items-center justify-center">
-                    {sale.status === "COMPLETED" && (
-                      <button
-                        onClick={() => setRefunding(sale)}
-                        className="flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
-                        title="Issue Refund"
-                      >
-                        <RotateCcw className="h-3 w-3" /> {t("refund")}
-                      </button>
+                const mainRow = (
+                  <tr
+                    key={`${saleKey}-main`}
+                    className={cn(
+                      "hover:bg-muted/30 cursor-pointer transition-colors",
+                      isExpanded && "bg-muted/20"
                     )}
-                  </div>
-                </td>
-              </tr>
-            );
+                    onClick={() => setExpanded(isExpanded ? null : sale.id)}
+                  >
+                    <td className="px-4 py-3.5 font-mono text-xs text-foreground font-medium">
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? (
+                          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+                        )}
+                        <span>{saleDateFormatter.format(new Date(sale.createdAt))}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3.5 text-xs text-muted-foreground font-medium">
+                      {sale.user?.name ?? "—"}
+                    </td>
+                    <td className="px-4 py-3.5 text-xs font-medium">
+                      <span className="inline-block px-2 py-0.5 rounded bg-muted/60 text-foreground text-[11px] font-mono">
+                        {sale.paymentMethod}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5">
+                      <span
+                        className={cn(
+                          "inline-flex items-center text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border",
+                          sale.status === "COMPLETED" && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30",
+                          sale.status === "VOIDED" && "bg-destructive/10 text-destructive border-destructive/20",
+                          sale.status === "REFUNDED" && "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                        )}
+                      >
+                        {sale.status}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3.5 text-right font-mono font-bold text-foreground">
+                      {formatCurrency(parseFloat(sale.total.toString()))}
+                    </td>
+                    <td className="px-4 py-3.5" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center justify-center">
+                        {sale.status === "COMPLETED" && (
+                          <button
+                            onClick={() => setRefunding(sale)}
+                            className="flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors shadow-2xs"
+                            title="Issue Refund"
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                            <span>{t("refund")}</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
 
-            if (expanded !== sale.id) {
-              return [mainRow];
-            }
+                if (!isExpanded) {
+                  return [mainRow];
+                }
 
-            const detailRow = (
-              <tr className="bg-muted/20" key={`${saleKey}-details`}>
-                <td colSpan={6} className="px-6 py-3">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr>
-                        <th className="text-left py-1">{tr("items")}</th>
-                        <th className="text-right py-1">{tr("qty")}</th>
-                        <th className="text-right py-1">{tr("price")}</th>
-                        <th className="text-right py-1">{t("total")}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {sale.items.map((item, i) => {
-                        const itemKey = `${item.id ?? "no-item-id"}-${saleKey}-${i}`;
-                        return (
-                          <>
-                            <tr key={itemKey}>
-                              <td className="py-1">{item.name}</td>
-                              <td className="text-right py-1">{item.quantity}</td>
-                              <td className="text-right py-1">
-                                {formatCurrency(parseFloat(item.price.toString()))}
-                              </td>
-                              <td className="text-right py-1">
-                                {formatCurrency(parseFloat(item.total.toString()))}
-                              </td>
+                const detailRow = (
+                  <tr className="bg-muted/15" key={`${saleKey}-details`}>
+                    <td colSpan={6} className="px-6 py-4 border-t border-border/40">
+                      <div className="rounded-md border border-border/60 bg-card p-3 shadow-2xs">
+                        <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground mb-2">
+                          {tr("receipt")} ({sale.items.length})
+                        </p>
+                        <table className="w-full text-xs">
+                          <thead className="border-b border-border/40 text-muted-foreground font-semibold">
+                            <tr>
+                              <th className="text-left py-1.5">{tr("items")}</th>
+                              <th className="text-right py-1.5">{tr("qty")}</th>
+                              <th className="text-right py-1.5">{tr("price")}</th>
+                              <th className="text-right py-1.5">{t("total")}</th>
                             </tr>
-                            {item.notes && (
-                              <tr key={`${itemKey}-notes`}>
-                                <td colSpan={4} className="pb-1 pl-3 text-[10px] italic text-muted-foreground">{item.notes}</td>
-                              </tr>
-                            )}
-                          </>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </td>
-              </tr>
-            );
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {sale.items.map((item, i) => {
+                              const itemKey = `${item.id ?? "no-item-id"}-${saleKey}-${i}`;
+                              return (
+                                <tr key={itemKey}>
+                                  <td className="py-2 font-medium text-foreground">
+                                    {item.name}
+                                    {item.notes && (
+                                      <p className="text-[10px] text-muted-foreground italic mt-0.5">{item.notes}</p>
+                                    )}
+                                  </td>
+                                  <td className="text-right py-2 font-mono">{item.quantity}</td>
+                                  <td className="text-right py-2 font-mono text-muted-foreground">
+                                    {formatCurrency(parseFloat(item.price.toString()))}
+                                  </td>
+                                  <td className="text-right py-2 font-mono font-bold text-foreground">
+                                    {formatCurrency(parseFloat(item.total.toString()))}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </td>
+                  </tr>
+                );
 
-            return [mainRow, detailRow];
-          })}
-        </tbody>
-      </table>
-    </div>
+                return [mainRow, detailRow];
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-    {refunding && (
-      <RefundModal
-        saleId={refunding.id}
-        saleTotal={parseFloat(refunding.total.toString())}
-        items={refunding.items}
-        onClose={() => setRefunding(null)}
-      />
-    )}
+      {refunding && (
+        <RefundModal
+          saleId={refunding.id}
+          saleTotal={parseFloat(refunding.total.toString())}
+          items={refunding.items}
+          onClose={() => setRefunding(null)}
+        />
+      )}
     </>
   );
 }

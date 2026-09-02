@@ -13,5 +13,6 @@ export async function GET() {
     currencyDecimals: s.currencyDecimals,
     taxName: s.taxName,
     receiptFooter: s.receiptFooter,
+    posAutoLockMinutes: s.posAutoLockMinutes ?? 0,
   });
 }

@@ -1,4 +1,4 @@
-# Contributing to Olgax POS
+# Contributing to Izah POS
 
 Thank you for your interest in contributing! This document covers the most common contribution workflows.
 
@@ -17,8 +17,8 @@ Thank you for your interest in contributing! This document covers the most commo
 
 ```bash
 # Clone the repository
-git clone https://github.com/olgax/olgax-pos.git
-cd olgax-pos
+git clone https://github.com/izah/izah-pos.git
+cd izah-pos
 
 # Install dependencies
 pnpm install
@@ -38,7 +38,7 @@ pnpm dev
 
 ## Adding a New Language
 
-Olgax POS uses [next-intl](https://next-intl-docs.vercel.app/) for internationalization.
+Izah POS uses [next-intl](https://next-intl-docs.vercel.app/) for internationalization.
 
 ### Step 1 — Create the message file
 

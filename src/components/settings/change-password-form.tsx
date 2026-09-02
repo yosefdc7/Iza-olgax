@@ -1,10 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { X, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/ui/password-input";
 import { changePasswordAction } from "@/app/actions/user-actions";
+
+const changePasswordFormSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(4, "Password must be at least 4 characters"),
+    confirmPassword: z.string().min(1, "Confirm password is required"),
+  })
+  .refine((data) => data.newPassword === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+type ChangePasswordFormValues = z.infer<typeof changePasswordFormSchema>;
 
 interface ChangePasswordFormProps {
   open: boolean;
@@ -15,72 +30,54 @@ export function ChangePasswordForm({
   open,
   onOpenChange,
 }: ChangePasswordFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<ChangePasswordFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Workaround for Zod v4 resolver generic inference with react-hook-form
+    resolver: zodResolver(changePasswordFormSchema) as any,
+    defaultValues: {
+      currentPassword: "",
+      newPassword: "",
+      confirmPassword: "",
+    },
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   if (!open) return null;
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrors({});
-
-    // Client-side validation
-    const newErrors: Record<string, string> = {};
-    if (!formData.currentPassword) newErrors.currentPassword = "Current password is required";
-    if (!formData.newPassword) newErrors.newPassword = "New password is required";
-    if (formData.newPassword.length < 6) newErrors.newPassword = "Password must be at least 6 characters";
-    if (!formData.confirmPassword) newErrors.confirmPassword = "Confirm password is required";
-    if (formData.newPassword !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-
-    setIsLoading(true);
-
+  async function onSubmit(data: ChangePasswordFormValues) {
     try {
       const result = await changePasswordAction({
-        currentPassword: formData.currentPassword,
-        newPassword: formData.newPassword,
+        currentPassword: data.currentPassword,
+        newPassword: data.newPassword,
       });
 
       if (result.error) {
-        if ("details" in result && result.details) {
-          // Zod validation errors
-          const fieldErrors: Record<string, string> = {};
+        if ("details" in result && Array.isArray(result.details)) {
           result.details.forEach((err) => {
-            const key = err.path[0] !== undefined ? String(err.path[0]) : "global";
-            fieldErrors[key] = err.message;
+            if (err.path?.[0]) {
+              setError(err.path[0] as keyof ChangePasswordFormValues, {
+                type: "server",
+                message: err.message,
+              });
+            }
           });
-          setErrors(fieldErrors);
         } else {
           toast.error(result.error as string);
         }
-        setIsLoading(false);
         return;
       }
 
       toast.success("Password changed successfully");
-      setFormData({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
+      reset();
       onOpenChange(false);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Failed to change password"
       );
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -97,44 +94,26 @@ export function ChangePasswordForm({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-5 space-y-4">
           <PasswordInput
             label="Current Password"
-            value={formData.currentPassword}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                currentPassword: e.target.value,
-              }))
-            }
+            {...register("currentPassword")}
             placeholder="Enter your current password"
-            error={errors.currentPassword}
+            error={errors.currentPassword?.message}
           />
 
           <PasswordInput
             label="New Password"
-            value={formData.newPassword}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                newPassword: e.target.value,
-              }))
-            }
-            placeholder="Enter new password"
-            error={errors.newPassword}
+            {...register("newPassword")}
+            placeholder="Enter new password (min 4 characters)"
+            error={errors.newPassword?.message}
           />
 
           <PasswordInput
             label="Confirm Password"
-            value={formData.confirmPassword}
-            onChange={(e) =>
-              setFormData((prev) => ({
-                ...prev,
-                confirmPassword: e.target.value,
-              }))
-            }
+            {...register("confirmPassword")}
             placeholder="Confirm new password"
-            error={errors.confirmPassword}
+            error={errors.confirmPassword?.message}
           />
 
           <div className="flex gap-2 justify-end pt-4">
@@ -147,11 +126,11 @@ export function ChangePasswordForm({
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium inline-flex items-center gap-2"
             >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? "Changing..." : "Change Password"}
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Change Password
             </button>
           </div>
         </form>

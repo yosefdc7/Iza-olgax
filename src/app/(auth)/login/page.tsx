@@ -52,11 +52,11 @@ export default function LoginPage() {
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/android-chrome-192x192.png"
-              alt="Olgax POS"
+              alt="Izah POS"
               className="h-16 w-16 rounded-2xl shadow-md shadow-gray-200"
             />
             <div className="text-center">
-              <h1 className="text-2xl font-bold tracking-tight text-[#0f2044]">Olgax POS</h1>
+              <h1 className="text-2xl font-bold tracking-tight text-[#0f2044]">Izah POS</h1>
               <p className="text-sm text-gray-500 mt-0.5">Sign in to your account</p>
             </div>
           </div>
@@ -123,7 +123,7 @@ export default function LoginPage() {
 
         {/* Footer */}
         <p className="mt-6 text-center text-xs text-gray-400">
-          Olgax POS — Open Source Point of Sale
+          Izah POS — Open Source Point of Sale
         </p>
       </div>
     </div>

@@ -43,6 +43,7 @@ export default async function AppLayout({
       --sidebar: ${primary};
       --sidebar-primary: ${accent};
       --sidebar-primary-foreground: oklch(0.13 0.05 253);
+      --sidebar-border: oklch(1 0 0 / 18%);
       --accent: ${accent};
       --ring: ${accent};
     }
@@ -53,6 +54,7 @@ export default async function AppLayout({
   const cssVars: React.CSSProperties = {
     "--sidebar": primary,
     "--sidebar-primary": accent,
+    "--sidebar-border": "rgba(255, 255, 255, 0.18)",
   } as React.CSSProperties;
 
   return (

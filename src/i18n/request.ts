@@ -12,7 +12,7 @@ function isValidLocale(value: string | undefined): value is Locale {
 export default getRequestConfig(async () => {
   // Try cookie first (fast path — no DB needed on most requests)
   const cookieStore = await cookies();
-  const cookieLocale = cookieStore.get("olgax_locale")?.value;
+  const cookieLocale = cookieStore.get("izah_locale")?.value;
   if (cookieLocale && isValidLocale(cookieLocale)) {
     const messages = (await import(`../../messages/${cookieLocale}.json`)).default;
     return { locale: cookieLocale, messages };

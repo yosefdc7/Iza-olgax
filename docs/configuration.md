@@ -1,6 +1,6 @@
 # Configuration Reference
 
-All configuration for Olgax POS is managed through environment variables (server-side) and the in-app Settings page (business settings stored in the database).
+All configuration for Izah POS is managed through environment variables (server-side) and the in-app Settings page (business settings stored in the database).
 
 ---
 
@@ -21,7 +21,7 @@ Create a `.env` file in the project root (copy from `.env.example`).
 
 | Variable | Description | Example |
 |---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/olgax_pos` |
+| `DATABASE_URL` | PostgreSQL connection string | `postgresql://user:pass@localhost:5432/izah_pos` |
 | `BETTER_AUTH_SECRET` | Secret key for signing auth tokens. Must be at least 32 characters. **Change this in production.** | `a_very_long_random_secret_string` |
 
 ### Recommended
@@ -36,14 +36,14 @@ Create a `.env` file in the project root (copy from `.env.example`).
 | Variable | Description | Example |
 |---|---|---|
 | `BETTER_AUTH_TRUSTED_ORIGINS` | Comma-separated list of additional trusted origins (for multi-IP / reverse proxy setups). In development, `localhost` variants are trusted automatically. | `https://pos.myshop.com,https://192.168.1.10:3000` |
-| `DIRECT_URL` | Direct connection URL to PostgreSQL (only needed when using database poolers like PgBouncer for migrations). | `postgresql://user:pass@localhost:5432/olgax_pos` |
+| `DIRECT_URL` | Direct connection URL to PostgreSQL (only needed when using database poolers like PgBouncer for migrations). | `postgresql://user:pass@localhost:5432/izah_pos` |
 | `NODE_ENV` | Set to `production` in production deployments. | `production` |
 | `NEXT_STANDALONE` | Set to `1` to enable Next.js standalone output (required for Docker builds). | `1` |
 
 ### Example `.env` for local development
 
 ```env
-DATABASE_URL="postgresql://postgres:password@localhost:5432/olgax_pos"
+DATABASE_URL="postgresql://postgres:password@localhost:5432/izah_pos"
 BETTER_AUTH_SECRET="dev_secret_change_in_production_min_32_chars_here"
 BETTER_AUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -53,8 +53,8 @@ NODE_ENV="development"
 ### Example `.env` for production
 
 ```env
-DATABASE_URL="postgresql://postgres:STRONG_PASSWORD@db:5432/olgax_pos?pgbouncer=true"
-DIRECT_URL="postgresql://postgres:STRONG_PASSWORD@db:5432/olgax_pos"
+DATABASE_URL="postgresql://postgres:STRONG_PASSWORD@db:5432/izah_pos?pgbouncer=true"
+DIRECT_URL="postgresql://postgres:STRONG_PASSWORD@db:5432/izah_pos"
 BETTER_AUTH_SECRET="replace_with_64_char_truly_random_secret"
 BETTER_AUTH_URL="https://pos.yourshop.com"
 NEXT_PUBLIC_APP_URL="https://pos.yourshop.com"

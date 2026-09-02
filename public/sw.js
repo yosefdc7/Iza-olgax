@@ -1,9 +1,9 @@
 /**
- * Olgax POS — Service Worker
+ * Izah POS — Service Worker
  * Strategy: network-first for API routes, cache-first for static assets.
  */
 
-const CACHE_NAME = "olgax-pos-v2";
+const CACHE_NAME = "izah-pos-v2";
 
 const STATIC_PRECACHE = [
   "/",

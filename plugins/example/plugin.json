@@ -1,9 +1,9 @@
 {
-  "id": "com.olgax.example-plugin",
+  "id": "com.izah.example-plugin",
   "name": "Example Plugin",
   "version": "1.0.0",
-  "description": "A no-op example plugin demonstrating the Olgax POS plugin API.",
-  "author": "Olgax Community",
+  "description": "A no-op example plugin demonstrating the Izah POS plugin API.",
+  "author": "Izah Community",
   "hooks": ["onSaleComplete", "onProductUpdate"],
   "permissions": [],
   "enabled": true

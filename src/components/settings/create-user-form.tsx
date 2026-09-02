@@ -1,10 +1,15 @@
 "use client";
 
-import { useState } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import { X, Loader2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { PasswordInput } from "@/components/ui/password-input";
 import { createUserAction } from "@/app/actions/user-actions";
+import { createUserSchema } from "@/lib/user-schemas";
+
+type CreateUserFormValues = z.infer<typeof createUserSchema>;
 
 interface CreateUserFormProps {
   open: boolean;
@@ -13,50 +18,48 @@ interface CreateUserFormProps {
 }
 
 export function CreateUserForm({ open, onOpenChange, onUserCreated }: CreateUserFormProps) {
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: "",
-    email: "",
-    password: "",
-    role: "CASHIER" as "ADMIN" | "CASHIER",
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<CreateUserFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Workaround for Zod v4 resolver generic inference with react-hook-form
+    resolver: zodResolver(createUserSchema) as any,
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      pin: "",
+      role: "CASHIER",
+    },
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrors({});
-    setLoading(true);
-
+  async function onSubmit(data: CreateUserFormValues) {
     try {
-      const result = await createUserAction(formData);
+      const result = await createUserAction(data);
 
       if (result.error) {
         if (typeof result.error === "object") {
-          // Field errors from Zod
-          setErrors(
-            Object.entries(result.error as Record<string, string[]>).reduce(
-              (acc, [key, msgs]) => {
-                acc[key] = (msgs as string[])[0];
-                return acc;
-              },
-              {} as Record<string, string>
-            )
-          );
+          Object.entries(result.error as Record<string, string[]>).forEach(([field, msgs]) => {
+            setError(field as keyof CreateUserFormValues, {
+              type: "server",
+              message: msgs[0],
+            });
+          });
         } else {
           toast.error(result.error);
         }
-        setLoading(false);
         return;
       }
 
-      toast.success(`User ${formData.email} created successfully`);
-      setFormData({ name: "", email: "", password: "", role: "CASHIER" });
+      toast.success(`User ${data.email} created successfully`);
+      reset();
       onOpenChange(false);
       onUserCreated?.();
-    } catch (err) {
+    } catch {
       toast.error("Failed to create user");
-    } finally {
-      setLoading(false);
     }
   }
 
@@ -76,56 +79,73 @@ export function CreateUserForm({ open, onOpenChange, onUserCreated }: CreateUser
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-6 space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Name *</label>
             <input
               type="text"
-              required
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              {...register("name")}
               placeholder="John Doe"
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
-            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+            {errors.name && <p className="text-xs text-destructive">{errors.name.message}</p>}
           </div>
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Email *</label>
             <input
               type="email"
-              required
-              value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              {...register("email")}
               placeholder="john@example.com"
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             />
-            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+            {errors.email && <p className="text-xs text-destructive">{errors.email.message}</p>}
           </div>
 
           <div className="space-y-1.5">
             <PasswordInput
               label="Password *"
-              required
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="••••••••"
-              error={errors.password}
+              {...register("password")}
+              placeholder="At least 4 characters"
+              error={errors.password?.message}
               className="flex h-9 rounded-md"
             />
+            <p className="text-[11px] text-muted-foreground">Minimum 4 characters (simple text or numbers allowed).</p>
+          </div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>4-Digit POS PIN (Optional)</span>
+              </label>
+              <span className="text-[11px] text-muted-foreground">4 digits</span>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              {...register("pin")}
+              placeholder="e.g. 1234"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm font-mono tracking-widest outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            {errors.pin && <p className="text-xs text-destructive">{errors.pin.message}</p>}
+            <p className="text-[11px] text-muted-foreground">
+              Used for quick POS terminal lock/unlock and fast cashier switching.
+            </p>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-sm font-medium">Role *</label>
             <select
-              value={formData.role}
-              onChange={(e) => setFormData({ ...formData, role: e.target.value as "ADMIN" | "CASHIER" })}
+              {...register("role")}
               className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
             >
               <option value="CASHIER">Cashier</option>
               <option value="ADMIN">Admin</option>
             </select>
-            {errors.role && <p className="text-xs text-destructive">{errors.role}</p>}
+            {errors.role && <p className="text-xs text-destructive">{errors.role.message}</p>}
           </div>
 
           <div className="flex gap-2 pt-4">
@@ -138,10 +158,10 @@ export function CreateUserForm({ open, onOpenChange, onUserCreated }: CreateUser
             </button>
             <button
               type="submit"
-              disabled={loading}
+              disabled={isSubmitting}
               className="flex-1 h-9 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium flex items-center justify-center gap-2"
             >
-              {loading && <Loader2 className="h-3 w-3 animate-spin" />}
+              {isSubmitting && <Loader2 className="h-3 w-3 animate-spin" />}
               Create User
             </button>
           </div>

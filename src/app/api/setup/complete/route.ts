@@ -61,7 +61,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     const response = NextResponse.json({ ok: true });
     // Set a cookie so middleware knows setup is complete without a DB round-trip
-    response.cookies.set("olgax-setup-complete", "1", {
+    response.cookies.set("izah-setup-complete", "1", {
       httpOnly: true,
       sameSite: "lax",
       path: "/",

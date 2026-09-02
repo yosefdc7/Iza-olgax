@@ -1,5 +1,5 @@
 {
-  "name": "olgax-pos",
+  "name": "izah-pos",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -14,6 +14,11 @@
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
+    "build:worker": "opennextjs-cloudflare build",
+    "deploy": "opennextjs-cloudflare build && wrangler deploy",
+    "preview": "opennextjs-cloudflare preview",
+    "d1:migrate": "wrangler d1 migrations apply izah-pos-db",
+    "d1:migrate:local": "wrangler d1 migrations apply izah-pos-db --local",
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
@@ -24,11 +29,17 @@
     "@aws-sdk/client-s3": "^3.1004.0",
     "@electric-sql/pglite": "^0.3.15",
     "@hookform/resolvers": "^5.2.2",
+    "@libsql/client": "^0.17.4",
+    "@opennextjs/cloudflare": "^1.20.5",
+    "@prisma/adapter-better-sqlite3": "^7.10.0",
+    "@prisma/adapter-d1": "^7.10.0",
+    "@prisma/adapter-libsql": "^7.10.0",
     "@prisma/adapter-pg": "^7.4.2",
     "@prisma/client": "^7.4.2",
     "@radix-ui/react-slot": "^1.2.4",
     "@vercel/blob": "^2.3.1",
     "better-auth": "^1.5.1",
+    "better-sqlite3": "^13.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.35.0",
@@ -54,6 +65,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^20",
     "@types/pg": "^8.18.0",
     "@types/react": "^19",
@@ -72,6 +84,7 @@
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.128.0"
   }
 }

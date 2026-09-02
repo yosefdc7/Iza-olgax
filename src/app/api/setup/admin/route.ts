@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { hashPin } from "@/lib/pin-auth";
 
 const schema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(4, "Password must be at least 4 characters"),
+  pin: z.string().regex(/^\d{4}$/, "PIN must be 4 digits").optional().or(z.literal("")),
 });
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -35,12 +37,13 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: parsed.error.flatten().fieldErrors }, { status: 400 });
   }
 
-  const { name, email, password } = parsed.data;
+  const { name, email, password, pin } = parsed.data;
 
   try {
     const { auth } = await import("@/lib/auth");
 
     // Use Better Auth's signUpEmail to handle password hashing
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Better Auth internal server API is dynamically typed based on plugins
     const result = await (auth.api as any).signUpEmail({
       body: { name, email, password },
     });
@@ -49,11 +52,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       throw new Error("Sign-up returned no result");
     }
 
-    // Update the created user to ADMIN role
+    // Update the created user to ADMIN role and set optional PIN
     const { prisma } = await import("@/lib/db");
     await prisma.user.update({
       where: { email },
-      data: { role: "ADMIN" },
+      data: {
+        role: "ADMIN",
+        pin: pin && pin.trim() !== "" ? hashPin(pin.trim()) : null,
+      },
     });
 
     return NextResponse.json({ ok: true, email });

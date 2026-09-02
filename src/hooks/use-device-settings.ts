@@ -9,7 +9,7 @@ export interface DeviceSettings {
   printerType: "serial" | "usb" | "none";
 }
 
-const STORAGE_KEY = "olgax-pos-device-settings";
+const STORAGE_KEY = "izah-pos-device-settings";
 
 const DEFAULTS: DeviceSettings = {
   defaultPaymentMethod: "CASH",

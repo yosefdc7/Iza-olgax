@@ -1,6 +1,6 @@
-# Contributing to Olgax POS
+# Contributing to Izah POS
 
-Thank you for your interest in contributing to Olgax POS! This guide explains how to get your environment set up, the coding standards we follow, and how to submit changes.
+Thank you for your interest in contributing to Izah POS! This guide explains how to get your environment set up, the coding standards we follow, and how to submit changes.
 
 ---
 
@@ -32,8 +32,8 @@ See [Getting Started → Option 2: Local Development Setup](getting-started.md#o
 **Short version:**
 
 ```bash
-git clone https://github.com/olgax/olgax-pos.git
-cd olgax-pos
+git clone https://github.com/izah/izah-pos.git
+cd izah-pos
 pnpm install
 cp .env.example .env     # fill in DATABASE_URL and BETTER_AUTH_SECRET
 pnpm db:migrate
@@ -178,7 +178,7 @@ refactor(auth): remove DB call from proxy.ts
 
 ## Reporting Bugs
 
-Please open a [GitHub Issue](https://github.com/olgax/olgax-pos/issues/new?template=bug_report.md) with:
+Please open a [GitHub Issue](https://github.com/izah/izah-pos/issues/new?template=bug_report.md) with:
 
 - Steps to reproduce
 - Expected vs actual behaviour
@@ -189,7 +189,7 @@ Please open a [GitHub Issue](https://github.com/olgax/olgax-pos/issues/new?templ
 
 ## Suggesting Features
 
-Open a [GitHub Discussion](https://github.com/olgax/olgax-pos/discussions) or a [Feature Request Issue](https://github.com/olgax/olgax-pos/issues/new?template=feature_request.md).
+Open a [GitHub Discussion](https://github.com/izah/izah-pos/discussions) or a [Feature Request Issue](https://github.com/izah/izah-pos/issues/new?template=feature_request.md).
 
 Check the [Project Roadmap Context](#project-roadmap-context) below before suggesting features that are explicitly saved for later.
 
@@ -208,6 +208,6 @@ The following features are **deliberately excluded from v0.1 MVP** but are plann
 | Multiple tax rules | Planned — replace single `taxRate` with `TaxRule[]` |
 | Plugin marketplace | Planned — folder-based plugins → dynamic registry |
 | AI forecasting | Planned — premium plugin |
-| Hosted SaaS (olgax.app) | Planned — same codebase, env-based gating |
+| Hosted SaaS (izah.app) | Planned — same codebase, env-based gating |
 
-For the full roadmap, see [olgax.com/roadmap](https://olgax.com/roadmap).
+For the full roadmap, see [izah.com/roadmap](https://izah.com/roadmap).

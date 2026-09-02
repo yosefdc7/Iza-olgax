@@ -45,7 +45,7 @@
     "price": "Precio",
     "amount": "Monto",
     "thank_you": "¡Gracias por su compra!",
-    "powered_by": "Desarrollado por Olgax POS"
+    "powered_by": "Desarrollado por Izah POS"
   },
   "products": {
     "title": "Productos",
@@ -180,5 +180,56 @@
     "of": "de",
     "enabled": "Activado",
     "disabled": "Desactivado"
+  },
+  "profile": {
+    "title": "Profile",
+    "subtitle": "Manage your account settings",
+    "account_info": "Account Information",
+    "account_info_desc": "Your personal account details",
+    "edit": "Edit",
+    "name": "Name",
+    "email": "Email",
+    "role": "Role",
+    "security": "Security",
+    "security_desc": "Manage your password and security settings",
+    "password": "Password",
+    "password_desc": "Change your password regularly for security",
+    "change_password": "Change Password"
+  },
+  "plugins": {
+    "title": "Plugins",
+    "description": "Installed plugins extend POS functionality via hooks. Place plugin folders in /plugins/.",
+    "no_plugins": "No plugins installed.",
+    "no_plugins_hint": "Drop a plugin folder into /plugins/ and register it in your app.",
+    "enabled": "Enabled",
+    "disabled": "Disabled",
+    "enable_aria": "Enable plugin",
+    "disable_aria": "Disable plugin",
+    "by_author": "by {author}"
+  },
+  "lock": {
+    "title": "Register Locked",
+    "prompt_select": "Select a cashier to unlock terminal",
+    "prompt_pin": "Enter 4-digit PIN for {name}",
+    "loading_staff": "Loading staff members…",
+    "no_users": "No users configured. Please sign in with password.",
+    "switch_cashier": "Switch",
+    "active": "Active",
+    "clear": "Clear",
+    "delete": "Delete",
+    "sign_in_password": "Sign in with password",
+    "terminal_label": "Izah POS Terminal",
+    "set_pin_title": "Set 4-Digit Quick PIN",
+    "set_pin_desc": "This 4-digit PIN is used to quickly unlock the register terminal and switch cashiers on POS.",
+    "new_pin": "New 4-Digit PIN",
+    "confirm_pin": "Confirm 4-Digit PIN",
+    "save_pin": "Save PIN",
+    "saving": "Saving…",
+    "pin_updated": "4-Digit PIN updated successfully",
+    "pin_format_error": "PIN must be exactly 4 numeric digits",
+    "pin_mismatch_error": "PINs do not match",
+    "unlocked_as": "Unlocked as {name}",
+    "failed_load_cashiers": "Failed to load cashiers",
+    "auth_error": "Authentication error"
   }
 }

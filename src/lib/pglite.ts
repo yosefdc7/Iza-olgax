@@ -17,7 +17,7 @@ export async function getPGlite(): Promise<PGlite> {
   initPromise = (async () => {
     // Dynamic import keeps the heavy WASM out of the server bundle
     const { PGlite } = await import("@electric-sql/pglite");
-    const db = new PGlite("idb://olgax-pos");
+    const db = new PGlite("idb://izah-pos");
 
     // Bootstrap local schema (sync_queue + products cache)
     await db.exec(`

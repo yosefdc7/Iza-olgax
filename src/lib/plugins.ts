@@ -1,5 +1,5 @@
 /**
- * Olgax POS Plugin System
+ * Izah POS Plugin System
  *
  * Lightweight hook-based plugin registry that lets extensions tap into
  * key application events without modifying core code.
@@ -99,10 +99,12 @@ class PluginRegistry {
    * @param handler  Callback invoked when the hook fires
    */
   on<K extends HookName>(hook: K, handler: Handler<K>): () => void {
-    if (!this.handlers.has(hook)) {
-      this.handlers.set(hook, []);
+    let list = this.handlers.get(hook);
+    if (!list) {
+      list = [];
+      this.handlers.set(hook, list);
     }
-    this.handlers.get(hook)!.push(handler as Handler<HookName>);
+    list.push(handler as Handler<HookName>);
     // Return unsubscribe function
     return () => this.off(hook, handler);
   }

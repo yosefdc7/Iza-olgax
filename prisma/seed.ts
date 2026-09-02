@@ -1,10 +1,7 @@
 import "dotenv/config";
 import crypto from "crypto";
-import { PrismaClient } from "../src/generated/prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
-
-const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL ?? "" });
-const prisma = new PrismaClient({ adapter });
+import { prisma } from "../src/lib/db";
+import { hashPin } from "../src/lib/pin-auth";
 
 /**
  * Hash a password exactly as Better Auth does internally:
@@ -35,13 +32,20 @@ async function upsertUser(
   name: string,
   password: string,
   role: "ADMIN" | "CASHIER",
+  pin?: string,
 ) {
   const hashedPassword = await hashPassword(password);
   const userId = crypto.randomBytes(12).toString("hex");
 
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    console.log(`  ↩  User ${email} already exists, skipping`);
+    if (pin) {
+      await prisma.user.update({
+        where: { email },
+        data: { pin: hashPin(pin) },
+      });
+    }
+    console.log(`  ↩  User ${email} already exists, updated PIN`);
     return existing;
   }
 
@@ -52,6 +56,7 @@ async function upsertUser(
       name,
       emailVerified: true,
       role,
+      pin: pin ? hashPin(pin) : null,
     },
   });
 
@@ -93,11 +98,11 @@ async function main() {
   console.log("✅ Business settings seeded");
 
   // ── Test users (used by E2E tests) ───────────────────────────────────────────
-  await upsertUser("admin@example.com", "Admin User", "admin123456", "ADMIN");
-  console.log("✅ Admin user seeded (admin@example.com / admin123456)");
+  await upsertUser("admin@example.com", "Admin User", "admin123456", "ADMIN", "1234");
+  console.log("✅ Admin user seeded (admin@example.com / admin123456 / PIN: 1234)");
 
-  await upsertUser("cashier@example.com", "Cashier User", "cashier123456", "CASHIER");
-  console.log("✅ Cashier user seeded (cashier@example.com / cashier123456)");
+  await upsertUser("cashier@example.com", "Cashier User", "cashier123456", "CASHIER", "5678");
+  console.log("✅ Cashier user seeded (cashier@example.com / cashier123456 / PIN: 5678)");
 
   // ── Sample products (E2E tests search for "Coffee") ─────────────────────────
   const products = [

@@ -199,7 +199,7 @@ export const useCartStore = create<CartState>()(
       },
     }),
     {
-      name: "olgax-pos-cart",
+      name: "izah-pos-cart",
     }
   )
 );

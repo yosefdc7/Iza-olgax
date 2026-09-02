@@ -1,6 +1,6 @@
 # API Reference
 
-Internal REST API endpoints used by the Olgax POS application. These are not a public external API — they are called by the app's own frontend.
+Internal REST API endpoints used by the Izah POS application. These are not a public external API — they are called by the app's own frontend.
 
 > All endpoints return `application/json`. Unless noted, the request body must be `Content-Type: application/json`.
 > All endpoints except `/api/auth/*`, `/api/settings` (GET), and `/api/setup/*` require an authenticated session (cookie set by Better Auth).
@@ -526,7 +526,7 @@ Probes the database connection and returns the current setup state. Called by th
 | `missingEnv` | string[] | List of missing required environment variable names |
 | `dbError` | string \| null | Human-readable database error message if connection failed |
 
-If `setupComplete` is `true`, this endpoint also sets the `olgax-setup-complete` cookie to heal any client state where the cookie was missing.
+If `setupComplete` is `true`, this endpoint also sets the `izah-setup-complete` cookie to heal any client state where the cookie was missing.
 
 ---
 
@@ -577,7 +577,7 @@ Creates the first admin user account.
 
 ### POST /api/setup/complete
 
-Saves business settings and marks setup as complete. Also sets the `olgax-setup-complete` cookie so the middleware knows setup is done without a DB round-trip on every request.
+Saves business settings and marks setup as complete. Also sets the `izah-setup-complete` cookie so the middleware knows setup is done without a DB round-trip on every request.
 
 **Body:**
 ```json
@@ -591,7 +591,7 @@ Saves business settings and marks setup as complete. Also sets the `olgax-setup-
 }
 ```
 
-**Success Response (sets `olgax-setup-complete` cookie):**
+**Success Response (sets `izah-setup-complete` cookie):**
 ```json
 { "ok": true }
 ```

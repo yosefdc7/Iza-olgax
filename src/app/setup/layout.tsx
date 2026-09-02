@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Setup — Olgax POS",
-  description: "First-time setup wizard for Olgax POS",
+  title: "Setup — Izah POS",
+  description: "First-time setup wizard for Izah POS",
 };
 
 export default function SetupLayout({ children }: { children: ReactNode }) {
@@ -22,10 +22,10 @@ export default function SetupLayout({ children }: { children: ReactNode }) {
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/android-chrome-192x192.png"
-          alt="Olgax POS"
+          alt="Izah POS"
           className="w-14 h-14 rounded-2xl shadow-md shadow-gray-200 mx-auto mb-3"
         />
-        <div className="text-[#0f2044] font-bold text-xl tracking-tight">Olgax POS</div>
+        <div className="text-[#0f2044] font-bold text-xl tracking-tight">Izah POS</div>
         <p className="mt-0.5 text-gray-500 text-sm">Setup Wizard</p>
       </header>
       <div className="relative w-full">

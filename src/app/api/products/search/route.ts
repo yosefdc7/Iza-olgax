@@ -43,8 +43,8 @@ export async function GET(req: NextRequest) {
     where: {
       active: true,
       OR: [
-        { name: { contains: q, mode: "insensitive" } },
-        { sku: { contains: q, mode: "insensitive" } },
+        { name: { contains: q } },
+        { sku: { contains: q } },
         { barcode: { equals: q } },
       ],
     },

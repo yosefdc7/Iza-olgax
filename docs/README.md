@@ -1,6 +1,6 @@
-# Olgax POS Documentation
+# Izah POS Documentation
 
-> **Olgax POS** is an open-source, offline-capable Point of Sale system by [OLGAX](https://olgax.com).  
+> **Izah POS** is an open-source, offline-capable Point of Sale system by [Izah](https://izah.com).  
 > Free forever for self-hosted deployments.
 
 ---
@@ -21,13 +21,13 @@
 
 ## Quick Links
 
-- **GitHub**: [github.com/olgax/olgax-pos](https://github.com/olgax/olgax-pos)
-- **Website**: [olgax.com](https://olgax.com)
-- **Roadmap**: [olgax.com/roadmap](https://olgax.com/roadmap)
-- **Issues**: [github.com/olgax/olgax-pos/issues](https://github.com/olgax/olgax-pos/issues)
+- **GitHub**: [github.com/izah/izah-pos](https://github.com/izah/izah-pos)
+- **Website**: [izah.com](https://izah.com)
+- **Roadmap**: [izah.com/roadmap](https://izah.com/roadmap)
+- **Issues**: [github.com/izah/izah-pos/issues](https://github.com/izah/izah-pos/issues)
 
 ---
 
 ## License
 
-MIT © [OLGAX](https://olgax.com)
+MIT © [Izah](https://izah.com)

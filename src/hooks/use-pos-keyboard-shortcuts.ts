@@ -6,6 +6,7 @@ interface PosShortcutOptions {
   onHoldOrders: () => void;
   onShowHelp: () => void;
   onEscape: () => void;
+  onLockTerminal?: () => void;
 }
 
 /**
@@ -13,6 +14,7 @@ interface PosShortcutOptions {
  * / or F2  → focus product search
  * F8       → open payment panel
  * F4       → open held orders
+ * F6       → lock terminal
  * ?        → show shortcut cheat sheet
  * Escape   → close/dismiss
  */
@@ -22,6 +24,7 @@ export function usePosKeyboardShortcuts({
   onHoldOrders,
   onShowHelp,
   onEscape,
+  onLockTerminal,
 }: PosShortcutOptions) {
   const handler = useCallback(
     (e: KeyboardEvent) => {
@@ -43,6 +46,10 @@ export function usePosKeyboardShortcuts({
           e.preventDefault();
           onHoldOrders();
           break;
+        case "F6":
+          e.preventDefault();
+          onLockTerminal?.();
+          break;
         case "F8":
           e.preventDefault();
           onOpenPayment();
@@ -57,7 +64,7 @@ export function usePosKeyboardShortcuts({
           break;
       }
     },
-    [onFocusSearch, onOpenPayment, onHoldOrders, onShowHelp, onEscape]
+    [onFocusSearch, onOpenPayment, onHoldOrders, onShowHelp, onEscape, onLockTerminal]
   );
 
   useEffect(() => {

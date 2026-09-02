@@ -1,8 +1,8 @@
 <div align="center">
-  <h1>Olgax POS</h1>
+  <h1>Izah POS</h1>
   <p>Open-source, offline-capable Point of Sale system — free forever for self-hosted deployments.</p>
   <p>
-    <a href="https://olgax.com">olgax.com</a> ·
+    <a href="https://izah.com">izah.com</a> ·
     <a href="https://discord.gg/EAXcCXgUz2">Discord Community</a> ·
     <a href="docs/getting-started.md">Getting Started</a> ·
     <a href="docs/architecture.md">Architecture</a> ·
@@ -20,9 +20,9 @@
 
 ---
 
-## What is Olgax POS?
+## What is Izah POS?
 
-**Olgax POS** is a fast, touch-friendly, fully offline-capable Point of Sale system built by [OLGAX](https://olgax.com). It is designed to be good enough for real small businesses to use daily — for free, forever — while remaining extensible into a full-featured SaaS platform.
+**Izah POS** is a fast, touch-friendly, fully offline-capable Point of Sale system built by [Izah](https://izah.com). It is designed to be good enough for real small businesses to use daily — for free, forever — while remaining extensible into a full-featured SaaS platform.
 
 - **Self-hosted** — run it on your own server with Docker in minutes.
 - **Offline-first** — uses PGLite (Postgres WASM) to record sales even with no internet, then syncs automatically when connectivity returns.
@@ -62,8 +62,8 @@
 
 ```bash
 # 1. Clone
-git clone https://github.com/olgax/olgax-pos.git
-cd olgax-pos
+git clone https://github.com/izah/izah-pos.git
+cd izah-pos
 
 # 2. Configure secrets
 cp .env.example .env
@@ -82,7 +82,7 @@ The first time you open the app you will be guided through a setup wizard that m
 
 ## Quick Start (Serverless — Vercel / Netlify)
 
-You can run Olgax POS serverless without Docker or a VPS:
+You can run Izah POS serverless without Docker or a VPS:
 
 1. **Fork or Use Template**: Click **Fork** or **Use this template** at the top of this repository to create a copy in your own account.
 2. **Deploy**: Import your copy into **Vercel** or **Netlify**.
@@ -98,8 +98,8 @@ See the [Deployment Guide](docs/deployment.md#serverless-deployments-vercel--net
 
 ```bash
 # 1. Clone & install
-git clone https://github.com/olgax/olgax-pos.git
-cd olgax-pos
+git clone https://github.com/izah/izah-pos.git
+cd izah-pos
 pnpm install
 
 # 2. Configure environment
@@ -156,9 +156,9 @@ The MVP (v0.1) is designed to be immediately useful for small businesses while l
 - [ ] Plugin system
 - [ ] Advanced reports + charts
 - [ ] Kitchen Display System (KDS)
-- [ ] Hosted SaaS at olgax.app
+- [ ] Hosted SaaS at izah.app
 
-See [OLGAX Roadmap](https://olgax.com/roadmap) for the full picture.
+See [Izah Roadmap](https://izah.com/roadmap) for the full picture.
 
 ---
 
@@ -166,4 +166,4 @@ See [OLGAX Roadmap](https://olgax.com/roadmap) for the full picture.
 
 MIT — see [LICENSE](LICENSE) for details.
 
-Built with ❤️ by [OLGAX](https://olgax.com)
+Built with ❤️ by [Izah](https://izah.com)

@@ -11,8 +11,8 @@ const RTL_LOCALES = ["ar", "he", "fa", "ur"];
 
 export const metadata: Metadata = {
   title: {
-    default: "Olgax POS",
-    template: "%s | Olgax POS",
+    default: "Izah POS",
+    template: "%s | Izah POS",
   },
   description: "Open-source, offline-capable Point of Sale for small businesses",
   manifest: "/manifest.json",
@@ -28,7 +28,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Olgax POS",
+    title: "Izah POS",
   },
 };
 

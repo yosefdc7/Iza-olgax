@@ -5,9 +5,9 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: olgax_pos
+      POSTGRES_DB: izah_pos
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -24,7 +24,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "postgresql://postgres:password@postgres:5432/olgax_pos?schema=public"
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/izah_pos?schema=public"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:-change_me_in_production}"
       BETTER_AUTH_URL: "${BETTER_AUTH_URL:-http://localhost:3000}"
       NEXT_PUBLIC_APP_URL: "${NEXT_PUBLIC_APP_URL:-http://localhost:3000}"

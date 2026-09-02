@@ -1,9 +1,15 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useEffect } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import type { z } from "zod";
+import { X, Loader2, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { updateUserAction } from "@/app/actions/user-actions";
+import { updateUserSchema } from "@/lib/user-schemas";
+
+type EditUserFormValues = z.infer<typeof updateUserSchema>;
 
 interface EditUserFormProps {
   open: boolean;
@@ -23,63 +29,71 @@ export function EditUserForm({
   user,
   onSuccess,
 }: EditUserFormProps) {
-  const [isLoading, setIsLoading] = useState(false);
-  const [formData, setFormData] = useState({
-    name: user.name || "",
-    email: user.email,
-    role: user.role,
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<EditUserFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Workaround for Zod v4 resolver generic inference with react-hook-form
+    resolver: zodResolver(updateUserSchema) as any,
+    defaultValues: {
+      name: user.name || "",
+      email: user.email,
+      role: user.role,
+      pin: "",
+    },
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (open) {
-      setFormData({
+      reset({
         name: user.name || "",
         email: user.email,
         role: user.role,
+        pin: "",
       });
-      setErrors({});
     }
-  }, [open, user]);
+  }, [open, user, reset]);
 
   if (!open) return null;
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setErrors({});
-    setIsLoading(true);
-
+  async function onSubmit(data: EditUserFormValues) {
     try {
-      const result = await updateUserAction(user.id, formData);
+      const payload: EditUserFormValues = {
+        name: data.name,
+        email: data.email,
+        role: data.role,
+      };
+
+      if (data.pin && data.pin.trim() !== "") {
+        payload.pin = data.pin.trim();
+      }
+
+      const result = await updateUserAction(user.id, payload);
 
       if (result.error) {
-        if ("details" in result && result.details) {
-          // Zod validation errors
-          const fieldErrors: Record<string, string> = {};
+        if ("details" in result && Array.isArray(result.details)) {
           result.details.forEach((err) => {
-            const key = err.path[0] !== undefined ? String(err.path[0]) : "global";
-            fieldErrors[key] = err.message;
+            if (err.path?.[0]) {
+              setError(err.path[0] as keyof EditUserFormValues, {
+                type: "server",
+                message: err.message,
+              });
+            }
           });
-          setErrors(fieldErrors);
         } else {
           toast.error(result.error as string);
         }
-        setIsLoading(false);
         return;
       }
 
       toast.success("User updated successfully");
-      setFormData({
-        name: user.name || "",
-        email: user.email,
-        role: user.role,
-      });
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to update user");
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -96,20 +110,17 @@ export function EditUserForm({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+        <form onSubmit={handleSubmit(onSubmit)} className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1.5">Name</label>
             <input
               type="text"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, name: e.target.value }))
-              }
+              {...register("name")}
               placeholder="John Doe"
               className="w-full px-3 py-2 rounded-lg border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {errors.name && (
-              <p className="text-xs text-destructive mt-1">{errors.name}</p>
+              <p className="text-xs text-destructive mt-1">{errors.name.message}</p>
             )}
           </div>
 
@@ -117,36 +128,52 @@ export function EditUserForm({
             <label className="block text-sm font-medium mb-1.5">Email</label>
             <input
               type="email"
-              value={formData.email}
-              onChange={(e) =>
-                setFormData((prev) => ({ ...prev, email: e.target.value }))
-              }
+              {...register("email")}
               placeholder="user@example.com"
               className="w-full px-3 py-2 rounded-lg border bg-background text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
             {errors.email && (
-              <p className="text-xs text-destructive mt-1">{errors.email}</p>
+              <p className="text-xs text-destructive mt-1">{errors.email.message}</p>
             )}
           </div>
 
           <div>
             <label className="block text-sm font-medium mb-1.5">Role</label>
             <select
-              value={formData.role}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  role: e.target.value as "ADMIN" | "CASHIER",
-                }))
-              }
+              {...register("role")}
               className="w-full px-3 py-2 rounded-lg border bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
               <option value="ADMIN">Admin</option>
               <option value="CASHIER">Cashier</option>
             </select>
             {errors.role && (
-              <p className="text-xs text-destructive mt-1">{errors.role}</p>
+              <p className="text-xs text-destructive mt-1">{errors.role.message}</p>
             )}
+          </div>
+
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-medium flex items-center gap-1.5">
+                <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+                <span>Reset 4-Digit POS PIN</span>
+              </label>
+              <span className="text-[11px] text-muted-foreground">Optional</span>
+            </div>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={4}
+              {...register("pin")}
+              placeholder="Leave blank to keep existing PIN"
+              className="w-full px-3 py-2 rounded-lg border bg-background text-foreground font-mono tracking-widest placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            {errors.pin && (
+              <p className="text-xs text-destructive mt-1">{errors.pin.message}</p>
+            )}
+            <p className="text-[11px] text-muted-foreground mt-1">
+              Set a new 4-digit numeric PIN for quick POS unlock & cashier switching.
+            </p>
           </div>
 
           <div className="flex gap-2 justify-end pt-4">
@@ -159,11 +186,11 @@ export function EditUserForm({
             </button>
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isSubmitting}
               className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm font-medium inline-flex items-center gap-2"
             >
-              {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-              {isLoading ? "Saving..." : "Save Changes"}
+              {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
+              Save Changes
             </button>
           </div>
         </form>

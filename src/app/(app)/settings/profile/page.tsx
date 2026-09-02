@@ -2,14 +2,17 @@
 
 import { useState } from "react";
 import { ChangePasswordForm } from "@/components/settings/change-password-form";
+import { ChangePinForm } from "@/components/settings/change-pin-form";
 import { EditProfileForm } from "@/components/settings/edit-profile-form";
 import { useSession } from "@/lib/auth-client";
 import { useTranslations } from "next-intl";
+import { KeyRound } from "lucide-react";
 
 export default function ProfilePage() {
   const t = useTranslations("profile");
   const { data: session, refetch } = useSession();
   const [passwordOpen, setPasswordOpen] = useState(false);
+  const [pinOpen, setPinOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
 
   if (!session?.user) {
@@ -66,15 +69,16 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <div className="rounded-lg border p-6">
-        <div className="mb-4">
+      <div className="rounded-lg border p-6 space-y-6">
+        <div>
           <h2 className="text-xl font-semibold">{t("security")}</h2>
           <p className="text-sm text-muted-foreground">{t("security_desc")}</p>
         </div>
-        <div className="flex items-center justify-between">
+
+        <div className="flex items-center justify-between border-b pb-4">
           <div>
             <h3 className="font-medium">{t("password")}</h3>
-            <p className="text-sm text-muted-foreground">{t("password_desc")}</p>
+            <p className="text-sm text-muted-foreground">Change your password (minimum 4 characters)</p>
           </div>
           <button
             onClick={() => setPasswordOpen(true)}
@@ -83,11 +87,34 @@ export default function ProfilePage() {
             {t("change_password")}
           </button>
         </div>
+
+        <div className="flex items-center justify-between pt-1">
+          <div>
+            <div className="flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-primary" />
+              <h3 className="font-medium">4-Digit POS Quick PIN</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              Used for fast terminal lock/unlock and cashier switching on the register
+            </p>
+          </div>
+          <button
+            onClick={() => setPinOpen(true)}
+            className="px-4 py-2 rounded-lg border border-input hover:bg-muted transition-colors text-sm font-medium"
+          >
+            Set / Change PIN
+          </button>
+        </div>
       </div>
 
       <ChangePasswordForm
         open={passwordOpen}
         onOpenChange={setPasswordOpen}
+      />
+
+      <ChangePinForm
+        open={pinOpen}
+        onOpenChange={setPinOpen}
       />
 
       <EditProfileForm

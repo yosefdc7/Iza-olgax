@@ -133,7 +133,7 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
     <StepCard>
       <div className="px-8 py-10 text-center">
         <div className="text-5xl mb-4">🏪</div>
-        <h1 className="text-2xl font-bold text-[#0f2044] mb-2">Welcome to Olgax POS</h1>
+        <h1 className="text-2xl font-bold text-[#0f2044] mb-2">Welcome to Izah POS</h1>
         <p className="text-gray-500 mb-8">
           Let&apos;s set up your store in just a few steps. No technical knowledge required.
         </p>
@@ -236,7 +236,7 @@ function StepSystemCheck({ onNext, onBack }: { onNext: () => void; onBack: () =>
                 of your project with the following content:
               </p>
               <CopyBlock
-                code={`DATABASE_URL="postgresql://olgax:olgax@localhost:5432/olgax_pos"
+                code={`DATABASE_URL="postgresql://izah:izah@localhost:5432/izah_pos"
 BETTER_AUTH_SECRET="${Array.from(crypto.getRandomValues(new Uint8Array(32)))
   .map((b) => b.toString(16).padStart(2, "0"))
   .join("")}"`}
@@ -472,6 +472,7 @@ function StepAdminAccount({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [pin, setPin] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -480,8 +481,9 @@ function StepAdminAccount({
   const validate = () => {
     if (name.trim().length < 2) return "Name must be at least 2 characters.";
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "Please enter a valid email address.";
-    if (password.length < 8) return "Password must be at least 8 characters.";
+    if (password.length < 4) return "Password must be at least 4 characters.";
     if (password !== confirm) return "Passwords do not match.";
+    if (pin.trim() && !/^\d{4}$/.test(pin.trim())) return "PIN must be exactly 4 numeric digits.";
     return null;
   };
 
@@ -495,7 +497,12 @@ function StepAdminAccount({
       const res = await fetch("/api/setup/admin", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+          pin: pin.trim(),
+        }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -552,7 +559,7 @@ function StepAdminAccount({
                   type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="At least 8 characters"
+                  placeholder="At least 4 characters"
                   autoComplete="new-password"
                   className={`${inputClass} pr-12`}
                 />
@@ -590,6 +597,24 @@ function StepAdminAccount({
                   {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+                4-Digit POS Quick PIN (Optional)
+              </label>
+              <input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 4))}
+                placeholder="e.g. 1234"
+                className={`${inputClass} font-mono tracking-widest`}
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Used for fast POS terminal unlock and cashier switching.
+              </p>
             </div>
           </div>
 
@@ -808,7 +833,7 @@ function StepDone({ adminEmail }: { adminEmail: string }) {
           ✓
         </div>
         <h2 className="text-2xl font-bold text-[#0f2044] mb-2">You&apos;re all set!</h2>
-        <p className="text-gray-500 mb-2">Your Olgax POS is ready to use.</p>
+        <p className="text-gray-500 mb-2">Your Izah POS is ready to use.</p>
         {adminEmail && (
           <p className="text-sm text-gray-400 mb-8">
             Admin account:{" "}

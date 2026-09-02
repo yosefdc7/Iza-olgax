@@ -56,3 +56,11 @@ next-env.d.ts
 
 # uploaded product images
 /public/uploads
+
+# cloudflare & local databases
+.open-next/
+*.db
+*.db-journal
+prisma/schema.sql
+prisma/seed.sql
+

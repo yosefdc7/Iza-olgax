@@ -2,7 +2,7 @@
  * Playwright global setup
  *
  * Runs once before all tests. Hits /api/setup/status so the server sets
- * the "olgax-setup-complete" cookie in its own response headers.  That
+ * the "izah-setup-complete" cookie in its own response headers.  That
  * cookie is then written into the shared storage-state file used by all
  * browser contexts, so the middleware (proxy.ts) never redirects test
  * traffic to /setup.
@@ -22,7 +22,7 @@ export default async function globalSetup(_config: FullConfig) {
   // always sent on all requests (including fetch POST).
   await context.addCookies([
     {
-      name: "olgax-setup-complete",
+      name: "izah-setup-complete",
       value: "1",
       domain: "localhost",
       path: "/",
@@ -56,7 +56,7 @@ export default async function globalSetup(_config: FullConfig) {
     console.warn("[globalSetup] Could not reach /api/setup/status:", err);
   }
 
-  // Save the cookies (including olgax-setup-complete) to the shared storage state
+  // Save the cookies (including izah-setup-complete) to the shared storage state
   await context.storageState({ path: "playwright/.auth/setup.json" });
 
   await context.close();

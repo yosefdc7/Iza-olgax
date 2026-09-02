@@ -26,6 +26,8 @@ const settingsSchema = z.object({
   loyaltyRedeemValue: z.number().min(1),
   // Inventory
   lowStockThreshold: z.number().int().min(0),
+  // POS Security
+  posAutoLockMinutes: z.number().int().min(0).default(0),
   // Storage
   storageProvider: z.string().default("local"),
   storageRegion: z.string().default(""),
@@ -54,6 +56,7 @@ type SettingsFormValues = {
   loyaltyEarnRate: number;
   loyaltyRedeemValue: number;
   lowStockThreshold: number;
+  posAutoLockMinutes: number;
   storageProvider: string;
   storageRegion: string;
   storageBucket: string;
@@ -79,6 +82,7 @@ interface Props {
     loyaltyEarnRate: { toString(): string };
     loyaltyRedeemValue: { toString(): string };
     lowStockThreshold: number;
+    posAutoLockMinutes?: number;
     // Storage
     storageProvider: string;
     storageRegion: string | null;
@@ -115,6 +119,7 @@ export function SettingsForm({ settings }: Props) {
       loyaltyEarnRate: parseFloat(settings.loyaltyEarnRate.toString()),
       loyaltyRedeemValue: parseFloat(settings.loyaltyRedeemValue.toString()),
       lowStockThreshold: settings.lowStockThreshold,
+      posAutoLockMinutes: settings.posAutoLockMinutes ?? 0,
       // Storage — secret key intentionally never pre-filled (security)
       storageProvider: settings.storageProvider,
       storageRegion: settings.storageRegion ?? "",
@@ -363,6 +368,27 @@ export function SettingsForm({ settings }: Props) {
             </p>
           </div>
         )}
+      </section>
+
+      {/* POS Terminal Security */}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold border-b pb-2">POS Terminal Security</h2>
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Inactivity Auto-Lock Timer</label>
+          <select
+            {...register("posAutoLockMinutes", { valueAsNumber: true })}
+            className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+          >
+            <option value={0}>Disabled (Manual Lock Only)</option>
+            <option value={1}>1 Minute</option>
+            <option value={5}>5 Minutes</option>
+            <option value={15}>15 Minutes</option>
+            <option value={30}>30 Minutes</option>
+          </select>
+          <p className="text-xs text-muted-foreground">
+            Automatically lock the POS register and require a 4-digit PIN when idle.
+          </p>
+        </div>
       </section>
 
       <div className="flex items-center gap-4">

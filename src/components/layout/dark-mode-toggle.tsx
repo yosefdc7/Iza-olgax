@@ -7,7 +7,7 @@ export function DarkModeToggle() {
   const [dark, setDark] = useState(false);
 
   useEffect(() => {
-    const stored = localStorage.getItem("olgax-theme");
+    const stored = localStorage.getItem("izah-theme");
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     const isDark = stored ? stored === "dark" : prefersDark;
     setDark(isDark);
@@ -18,7 +18,7 @@ export function DarkModeToggle() {
     const next = !dark;
     setDark(next);
     document.documentElement.classList.toggle("dark", next);
-    localStorage.setItem("olgax-theme", next ? "dark" : "light");
+    localStorage.setItem("izah-theme", next ? "dark" : "light");
   }
 
   return (

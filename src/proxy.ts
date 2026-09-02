@@ -22,9 +22,15 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Check setup completion via cookie (set by /api/setup/complete)
-  const setupDone = request.cookies.get("olgax-setup-complete")?.value === "1";
-  const hasDbUrl = !!process.env.DATABASE_URL;
+  // Check auth via session cookie – no DB round-trip needed in Edge runtime.
+  // Better Auth uses "better-auth.session_token" (or __Secure- prefixed on HTTPS).
+  const hasSession =
+    !!request.cookies.get("better-auth.session_token")?.value ||
+    !!request.cookies.get("__Secure-better-auth.session_token")?.value;
+
+  // Check setup completion via cookie (set by /api/setup/complete) or existing session
+  const setupDone = request.cookies.get("izah-setup-complete")?.value === "1" || hasSession;
+  const hasDb = !!process.env.DATABASE_URL || !!(process.env as any).DB;
   const hasAuthSecret = !!process.env.BETTER_AUTH_SECRET;
 
   // If setup IS done and trying to access /setup, redirect to login/pos
@@ -38,18 +44,10 @@ export function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // If setup NOT done, redirect to setup (unless already there), but allow other API routes if needed?
-  // No, strict barrier: if setup incomplete, force setup.
-  // Exception: /api/setup/* is needed. 
-  if ((!setupDone || !hasDbUrl || !hasAuthSecret) && !isSetupPath) {
+  // If setup NOT done, redirect to setup (unless already there), but allow other API routes if needed
+  if ((!setupDone || !hasDb || !hasAuthSecret) && !isSetupPath) {
     return NextResponse.redirect(new URL("/setup", request.url));
   }
-
-  // Check auth via session cookie – no DB round-trip needed in Edge runtime.
-  // Better Auth uses "better-auth.session_token" (or __Secure- prefixed on HTTPS).
-  const hasSession =
-    !!request.cookies.get("better-auth.session_token")?.value ||
-    !!request.cookies.get("__Secure-better-auth.session_token")?.value;
 
   // If authenticated user tries to access /login, redirect to /pos
   if (hasSession && pathname === "/login") {

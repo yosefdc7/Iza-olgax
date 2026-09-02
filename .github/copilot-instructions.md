@@ -1,4 +1,4 @@
-﻿# Olgax POS — Contributor Guidelines
+# Izah POS — Contributor Guidelines
 
 **Stack**: Next.js 16 App Router · TypeScript strict · shadcn/ui · Tailwind CSS 4 · Prisma + PostgreSQL · PGLite (offline) · Better Auth · Zustand · react-hook-form + Zod · Vitest + Playwright
 
@@ -24,7 +24,7 @@
 
 ## What's in Scope
 
-- Bug fixes and improvements to existing features
+- Bug fixes and improvements to existing features (including PIN authentication, fast cashier switching, and local hook plugins)
 - New locale files under `messages/` (copy `en.json` as template)
 - Accessibility improvements
 - Performance improvements (especially on the POS screen)
@@ -33,7 +33,7 @@
 ## What's Out of Scope (do not add without discussion)
 
 - Multi-store / multi-location
-- Plugin system
+- Remote dynamic plugin marketplace / external downloads (local hook plugins in `/plugins/` are supported)
 - Payment gateway integrations
 - Any feature requiring a separate backend service
 

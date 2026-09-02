@@ -6,7 +6,7 @@ test.describe("Split Payment", () => {
     await loginAsAdmin(page);
     await page.goto("http://localhost:3000/pos");
     // Clear persisted cart state from previous tests
-    await page.evaluate(() => localStorage.removeItem("olgax-pos-cart"));
+    await page.evaluate(() => localStorage.removeItem("izah-pos-cart"));
     await page.reload();
     await page.waitForLoadState("networkidle");
   });

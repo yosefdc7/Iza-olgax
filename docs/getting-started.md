@@ -1,6 +1,6 @@
-# Getting Started with Olgax POS
+# Getting Started with Izah POS
 
-> **Olgax POS** is an open-source POS system by [OLGAX](https://olgax.com). This guide covers every installation method from quick Docker deployments to full local development setups.
+> **Izah POS** is an open-source POS system by [Izah](https://izah.com). This guide covers every installation method from quick Docker deployments to full local development setups.
 
 ---
 
@@ -34,8 +34,8 @@ This is the fastest way to get a production-ready instance running.
 
 ```bash
 # Clone the repository
-git clone https://github.com/olgax/olgax-pos.git
-cd olgax-pos
+git clone https://github.com/izah/izah-pos.git
+cd izah-pos
 
 # Copy and configure environment file
 cp .env.example .env
@@ -56,7 +56,7 @@ docker compose up -d
 
 The Docker Compose stack includes:
 - **PostgreSQL 16** — persistent data volume
-- **Olgax POS web** — Next.js app, listens on port 3000
+- **Izah POS web** — Next.js app, listens on port 3000
 
 Open `http://localhost:3000` (or your server IP) and follow the [Setup Wizard](#first-run-setup-wizard).
 
@@ -67,8 +67,8 @@ Open `http://localhost:3000` (or your server IP) and follow the [Setup Wizard](#
 ### 1. Clone and install dependencies
 
 ```bash
-git clone https://github.com/olgax/olgax-pos.git
-cd olgax-pos
+git clone https://github.com/izah/izah-pos.git
+cd izah-pos
 pnpm install
 ```
 
@@ -83,7 +83,7 @@ docker compose up postgres -d
 This starts Postgres on `localhost:5432` with:
 - User: `postgres`
 - Password: `password`  
-- Database: `olgax_pos`
+- Database: `izah_pos`
 
 ### 3. Configure environment variables
 
@@ -94,7 +94,7 @@ cp .env.example .env
 Minimum required `.env` contents:
 
 ```env
-DATABASE_URL="postgresql://postgres:password@localhost:5432/olgax_pos"
+DATABASE_URL="postgresql://postgres:password@localhost:5432/izah_pos"
 BETTER_AUTH_SECRET="a_random_secret_at_least_32_chars_long"
 BETTER_AUTH_URL="http://localhost:3000"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
@@ -201,5 +201,5 @@ Update `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` in your `.env` to match the n
 ### Login loop / redirected back to `/login` immediately after signing in
 
 This can happen if:
-- The `olgax-setup-complete` cookie is missing — revisit `/setup` to re-run the wizard, or set the cookie manually.
+- The `izah-setup-complete` cookie is missing — revisit `/setup` to re-run the wizard, or set the cookie manually.
 - `BETTER_AUTH_URL` does not match the origin you are accessing the app from. Update `.env` to match your actual URL (including port).

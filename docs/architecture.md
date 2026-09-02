@@ -1,6 +1,6 @@
 # Architecture
 
-Technical overview of the current Olgax POS codebase.
+Technical overview of the current Izah POS codebase.
 
 Last validated against code: 2026-03-14.
 
@@ -43,7 +43,7 @@ Last validated against code: 2026-03-14.
 ## Project Structure
 
 ```text
-olgax-pos/
+izah-pos/
 ├── docs/                          # Public project docs
 ├── messages/                      # next-intl locale files (14 locales)
 ├── plugins/
@@ -183,7 +183,7 @@ Role model:
 - Several authenticated pages and APIs are role-open (session required but not ADMIN-only).
 
 Setup gating:
-- Setup completion cookie: `olgax-setup-complete`.
+- Setup completion cookie: `izah-setup-complete`.
 - If setup is incomplete (or required env vars missing), middleware redirects to `/setup`.
 
 ---
@@ -244,7 +244,7 @@ Auth models (Better Auth):
 ## Offline Architecture
 
 Offline stack:
-- Browser PGLite instance at `idb://olgax-pos`
+- Browser PGLite instance at `idb://izah-pos`
 - Local tables:
   - `sync_queue` for queued writes (`endpoint`, `method`, `payload`, status fields)
   - `products_cache` for offline product lookup
@@ -263,7 +263,7 @@ Behavior:
 
 - Implemented with `next-intl` using `src/i18n/request.ts`.
 - Locale selection order:
-  1. `olgax_locale` cookie
+  1. `izah_locale` cookie
   2. `BusinessSettings.language`
   3. fallback `en`
 - Supported locales in code:

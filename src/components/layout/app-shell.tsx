@@ -34,7 +34,7 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
   return (
     <div className="flex h-screen overflow-hidden bg-background print:block print:h-auto print:overflow-visible" style={cssVars}>
       {/* Desktop sidebar — always visible on lg+ */}
-      <div className="hidden lg:block shrink-0 print:hidden">
+      <div className="hidden lg:block shrink-0 print:hidden shadow-xs">
         <AppSidebar user={user} />
       </div>
 
@@ -43,11 +43,11 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
         <div className="lg:hidden fixed inset-0 z-50 flex">
           {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/50"
+            className="absolute inset-0 bg-black/60 backdrop-blur-xs"
             onClick={() => setSidebarOpen(false)}
           />
           {/* Sidebar panel */}
-          <div className="relative z-10 h-full w-56 shrink-0">
+          <div className="relative z-10 h-full w-60 shrink-0 shadow-2xl">
             <AppSidebar user={user} onLinkClick={() => setSidebarOpen(false)} />
           </div>
         </div>
@@ -55,25 +55,30 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
 
       {/* Main content area */}
       <div className="flex flex-1 flex-col overflow-hidden min-w-0 print:block print:overflow-visible">
-        {/* Top bar */}
-        <header className="flex h-14 shrink-0 items-center justify-between border-b bg-sidebar lg:bg-background px-4 gap-2 print:hidden">
-          <div className="flex items-center gap-2">
+        {/* Top bar — Crisp Variant A Header */}
+        <header className="flex h-14 shrink-0 items-center justify-between border-b border-border/80 bg-card/60 backdrop-blur-md px-4 gap-2 print:hidden z-10">
+          <div className="flex items-center gap-3">
             {/* Hamburger — mobile/tablet only */}
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden rounded-md p-2 text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+              className="lg:hidden rounded-lg p-2 text-foreground/80 hover:bg-accent transition-colors"
               aria-label="Open menu"
             >
               <Menu className="h-5 w-5" />
             </button>
-            {/* Mobile logo — only visible on mobile (sidebar hidden) */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/android-chrome-192x192.png"
-              alt="Olgax POS"
-              className="lg:hidden h-7 w-7 rounded-lg object-contain"
-            />
-            <span className="text-sm font-semibold text-white lg:hidden">Olgax POS</span>
+
+            {/* Mobile logo */}
+            <div className="flex items-center gap-2 lg:hidden">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/android-chrome-192x192.png"
+                alt="Izah POS"
+                className="h-7 w-7 rounded-lg object-contain"
+              />
+              <span className="text-sm font-bold tracking-tight">Izah POS</span>
+            </div>
+
+            {/* Desktop status info */}
             <span className="text-sm font-medium text-muted-foreground hidden lg:block">
               {new Date().toLocaleDateString("en-US", {
                 weekday: "short",
@@ -84,17 +89,18 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
-            <DarkModeToggle />
+          <div className="flex items-center gap-2">
             <SyncStatusBadge />
+            <div className="h-4 w-px bg-border/60" />
+            <DarkModeToggle />
           </div>
         </header>
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto print:overflow-visible">{children}</main>
+        <main className="flex-1 overflow-y-auto print:overflow-visible bg-background/50">{children}</main>
 
         {/* Mobile bottom navigation */}
-        <nav className="flex lg:hidden shrink-0 border-t bg-background print:hidden">
+        <nav className="flex lg:hidden shrink-0 border-t border-border bg-card/95 backdrop-blur-md print:hidden">
           {bottomNav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
@@ -103,12 +109,12 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
                 pathname === href || pathname.startsWith(href + "/")
-                  ? "text-primary"
-                  : "text-muted-foreground"
+                  ? "text-primary font-bold"
+                  : "text-muted-foreground hover:text-foreground"
               )}
             >
-              <Icon className="h-5 w-5" />
-              {label}
+              <Icon className="h-4 w-4" />
+              <span>{label}</span>
             </Link>
           ))}
         </nav>
