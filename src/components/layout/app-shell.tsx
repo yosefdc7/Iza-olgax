@@ -27,7 +27,7 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
     { href: "/pos", label: "POS", icon: ShoppingCart, roles: ["ADMIN", "CASHIER"] },
     { href: "/products", label: "Products", icon: Package, roles: ["ADMIN"] },
     { href: "/sales", label: "Sales", icon: ReceiptText, roles: ["ADMIN", "CASHIER"] },
-    { href: "/reports", label: "Reports", icon: BarChart3, roles: ["ADMIN"] },
+    { href: "/reports", label: "Reports", icon: BarChart3, roles: ["ADMIN", "CASHIER"] },
     { href: "/settings", label: "Settings", icon: Settings, roles: ["ADMIN"] },
   ].filter((item) => item.roles.includes(user.role ?? "CASHIER"));
 

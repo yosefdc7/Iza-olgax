@@ -27,9 +27,6 @@ export function useOnlineStatus(): SyncStatus {
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    // On mount, do a real connectivity check to the server.
-    canReachServer().then(setIsOnline);
-
     async function handleOnline() {
       const reachable = await canReachServer();
       setIsOnline(reachable);
@@ -59,12 +56,13 @@ export function useOnlineStatus(): SyncStatus {
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
 
+    // Replay pending writes immediately when a tab reloads while online.
+    void handleOnline();
+
     // Seed product cache on first load if online
     canReachServer().then((ok) => {
       if (ok) {
-        import("@/lib/sync")
-          .then(({ seedProductCache }) => seedProductCache())
-          .catch(() => {});
+        import("@/lib/sync").then(({ seedProductCache }) => seedProductCache()).catch(() => {});
       }
     });
 

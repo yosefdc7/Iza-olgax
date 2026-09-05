@@ -9,6 +9,7 @@ import { serialize } from "@/lib/serialize";
 import { SettingsForm } from "@/components/settings/settings-form";
 import { DeviceSettingsForm } from "@/components/settings/device-settings-form";
 import { PluginsPanel } from "@/components/settings/plugins-panel";
+import { ReceiptSeriesManager } from "@/components/settings/receipt-series-manager";
 import { DbError } from "@/components/ui/db-error";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +51,7 @@ export default async function SettingsPage() {
         taxName: settings.taxName,
         receiptFooter: settings.receiptFooter,
         language: settings.language,
+        businessTimezone: settings.businessTimezone,
         loyaltyEnabled: settings.loyaltyEnabled,
         loyaltyEarnRate: settings.loyaltyEarnRate,
         loyaltyRedeemValue: settings.loyaltyRedeemValue,
@@ -65,6 +67,8 @@ export default async function SettingsPage() {
       }} />
       <hr />
       <DeviceSettingsForm />
+      <hr />
+      <ReceiptSeriesManager />
       <hr />
       <PluginsPanel />
     </div>

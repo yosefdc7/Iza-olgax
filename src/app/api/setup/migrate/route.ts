@@ -5,6 +5,13 @@ import path from "path";
 export const maxDuration = 60; // 60s timeout
 
 export async function POST(): Promise<NextResponse> {
+  if ((process.env.NODE_ENV as string | undefined) === "production") {
+    return NextResponse.json(
+      { error: "Database migrations must be run before deployment." },
+      { status: 410 }
+    );
+  }
+
   if (!process.env.DATABASE_URL) {
     return NextResponse.json({ error: "DATABASE_URL is not set" }, { status: 400 });
   }
@@ -29,9 +36,7 @@ export async function POST(): Promise<NextResponse> {
   try {
     // Use migrate deploy in production, db push in development
     const isDev = process.env.NODE_ENV !== "production";
-    const command = isDev
-      ? `"${prismaBin}" db push`
-      : `"${prismaBin}" migrate deploy`;
+    const command = isDev ? `"${prismaBin}" db push` : `"${prismaBin}" migrate deploy`;
 
     const output = execSync(command, {
       cwd,

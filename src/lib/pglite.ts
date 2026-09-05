@@ -24,6 +24,8 @@ interface ProductCacheItem {
   barcode?: string | null;
   price: number;
   stock: number;
+  unit: string;
+  quantityPrecision: number;
   category?: string | null;
   updatedAt: number;
 }
@@ -133,6 +135,8 @@ export async function upsertProductCache(product: {
   barcode?: string | null;
   price: number;
   stock: number;
+  unit: string;
+  quantityPrecision: number;
   category?: string | null;
 }): Promise<void> {
   const db = await openDB();
@@ -158,6 +162,8 @@ export async function searchProductsOffline(query: string): Promise<
     barcode: string | null;
     price: number;
     stock: number;
+    unit: string;
+    quantityPrecision: number;
     category: string | null;
   }[]
 > {
@@ -187,6 +193,8 @@ export async function searchProductsOffline(query: string): Promise<
           barcode: p.barcode ?? null,
           price: p.price,
           stock: p.stock,
+          unit: p.unit ?? "pc",
+          quantityPrecision: p.quantityPrecision ?? 0,
           category: p.category ?? null,
         }));
       resolve(filtered);

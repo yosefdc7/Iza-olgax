@@ -110,7 +110,7 @@ cp .env.example .env
 pnpm db:migrate
 
 # 4. (Optional) Seed sample products
-pnpm db:seed
+pnpm db:seed:catalog
 
 # 5. Start dev server
 pnpm dev

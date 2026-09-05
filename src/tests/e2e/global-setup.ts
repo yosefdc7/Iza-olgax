@@ -48,7 +48,7 @@ export default async function globalSetup(_config: FullConfig) {
       const data = await response.json().catch(() => ({})) as { setupComplete?: boolean };
       if (!data.setupComplete) {
         console.warn(
-          "[globalSetup] setupComplete is false — run `pnpm db:seed` before E2E tests",
+          "[globalSetup] setupComplete is false — prepare an isolated E2E fixture before running browser tests",
         );
       }
     }

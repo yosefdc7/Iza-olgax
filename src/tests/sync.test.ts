@@ -13,11 +13,7 @@ vi.mock("@/lib/pglite", () => ({
   markSynced: vi.fn(),
 }));
 
-import {
-  getSyncStatus,
-  onSyncStatusChange,
-  replayOfflineQueue,
-} from "@/lib/sync";
+import { getSyncStatus, onSyncStatusChange, replayOfflineQueue } from "@/lib/sync";
 import { getPendingQueue, markSynced } from "@/lib/pglite";
 
 const mockGetPendingQueue = getPendingQueue as ReturnType<typeof vi.fn>;
@@ -124,6 +120,23 @@ describe("replayOfflineQueue — successful items", () => {
     expect(mockMarkSynced).toHaveBeenCalledWith(1);
     expect(mockMarkSynced).toHaveBeenCalledWith(2);
   });
+
+  it("coalesces concurrent replay calls", async () => {
+    let releasePending!: (items: ReturnType<typeof makeItem>[]) => void;
+    mockGetPendingQueue.mockReturnValueOnce(
+      new Promise((resolve) => {
+        releasePending = resolve;
+      })
+    );
+
+    const first = replayOfflineQueue();
+    const second = replayOfflineQueue();
+    expect(second).toBe(first);
+
+    releasePending([makeItem(3)]);
+    await first;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("replayOfflineQueue — fetch failure", () => {
@@ -141,9 +154,7 @@ describe("replayOfflineQueue — fetch failure", () => {
   });
 
   it("emits 'error' when at least one fetch returns non-ok", async () => {
-    fetchMock
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, status: 500 });
+    fetchMock.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, status: 500 });
 
     const statuses: string[] = [];
     const unsub = onSyncStatusChange((s) => statuses.push(s));
@@ -165,9 +176,7 @@ describe("replayOfflineQueue — fetch failure", () => {
   });
 
   it("still marks successfully fetched items as synced even if others fail", async () => {
-    fetchMock
-      .mockResolvedValueOnce({ ok: true })
-      .mockResolvedValueOnce({ ok: false, status: 500 });
+    fetchMock.mockResolvedValueOnce({ ok: true }).mockResolvedValueOnce({ ok: false, status: 500 });
 
     await replayOfflineQueue();
 

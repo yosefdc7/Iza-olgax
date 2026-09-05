@@ -74,7 +74,7 @@ export default async function ProductDetailPage({ params }: Props) {
         <StockAdjustButton
           productId={product.id}
           productName={product.name}
-          currentStock={product.stock}
+          currentStock={Number(product.stock)}
         />
         <Link
           href={`/products/${id}/edit`}
@@ -113,9 +113,9 @@ export default async function ProductDetailPage({ params }: Props) {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-2 border-t">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground uppercase font-medium">Current Stock</p>
-            <p className={`text-2xl font-bold ${product.stock <= product.lowStockThreshold ? "text-amber-600 dark:text-amber-400" : ""}`}>
-              {product.stock}
-              {product.stock <= product.lowStockThreshold && (
+            <p className={`text-2xl font-bold ${Number(product.stock) <= Number(product.lowStockThreshold) ? "text-amber-600 dark:text-amber-400" : ""}`}>
+              {Number(product.stock)} {product.unit}
+              {Number(product.stock) <= Number(product.lowStockThreshold) && (
                 <span className="ml-2 text-xs font-normal bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 px-1.5 py-0.5 rounded">Low</span>
               )}
             </p>
@@ -132,7 +132,7 @@ export default async function ProductDetailPage({ params }: Props) {
           )}
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground uppercase font-medium">Low Stock At</p>
-            <p className="text-2xl font-bold">{product.lowStockThreshold}</p>
+            <p className="text-2xl font-bold">{Number(product.lowStockThreshold)} {product.unit}</p>
           </div>
         </div>
       </div>

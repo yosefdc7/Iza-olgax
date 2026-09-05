@@ -4,10 +4,12 @@ export interface ReceiptItem {
   price: number;
   total: number;
   notes?: string;
+  unit?: string;
 }
 
 export interface ReceiptData {
   saleId?: string;
+  receiptReference?: string;
   customerName?: string;
   items: ReceiptItem[];
   subtotal: number;
@@ -76,6 +78,7 @@ export function Receipt({ data, settings }: ReceiptProps) {
           Sale #{data.saleId.slice(-8).toUpperCase()}
         </p>
       )}
+      {data.receiptReference && <p className="text-center text-sm font-bold mb-2">{data.receiptReference}</p>}
       {data.customerName && (
         <p className="text-[10px] text-center mb-2">For: {data.customerName}</p>
       )}
@@ -92,7 +95,7 @@ export function Receipt({ data, settings }: ReceiptProps) {
             </div>
             {item.quantity > 1 && (
               <div className="text-[10px] text-gray-500 pl-2">
-                {item.quantity} × {fmt(item.price, c, d)}
+                {item.quantity} {item.unit ?? "pc"} × {fmt(item.price, c, d)}
               </div>
             )}
             {item.notes && (

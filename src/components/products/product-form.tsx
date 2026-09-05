@@ -16,10 +16,12 @@ interface Product {
   barcode: string | null;
   price: { toString(): string };
   cost: { toString(): string } | null;
-  stock: number;
+  stock: { toString(): string };
+  unit: string;
+  quantityPrecision: number;
   category: string | null;
   imageUrl: string | null;
-  lowStockThreshold: number;
+  lowStockThreshold: { toString(): string };
   active: boolean;
 }
 
@@ -48,13 +50,15 @@ export function ProductForm({ product }: ProductFormProps) {
           barcode: product.barcode ?? "",
           price: parseFloat(product.price.toString()),
           cost: product.cost ? parseFloat(product.cost.toString()) : undefined,
-          stock: product.stock,
+          stock: parseFloat(String(product.stock)),
+          unit: product.unit,
+          quantityPrecision: product.quantityPrecision,
           category: product.category ?? "",
-          lowStockThreshold: product.lowStockThreshold,
+          lowStockThreshold: parseFloat(String(product.lowStockThreshold)),
           imageUrl: product.imageUrl ?? "",
           active: product.active,
         }
-      : { stock: 0, lowStockThreshold: 5, active: true },
+      : { stock: 0, unit: "pc", quantityPrecision: 0, lowStockThreshold: 5, active: true },
   });
 
   async function onSubmit(values: ProductFormValues) {
@@ -80,7 +84,7 @@ export function ProductForm({ product }: ProductFormProps) {
       Object.keys(fieldErrors).forEach((key) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         setError(key as any, { type: "server", message: fieldErrors[key][0] });
-        toast.error(fieldErrors[key][0]);  // also pop a toast for visibility
+        toast.error(fieldErrors[key][0]); // also pop a toast for visibility
       });
 
       // Form-level errors (not tied to a specific field)
@@ -111,7 +115,11 @@ export function ProductForm({ product }: ProductFormProps) {
     }
   }
 
-  function field(label: string, name: keyof ProductFormValues, props?: React.InputHTMLAttributes<HTMLInputElement>) {
+  function field(
+    label: string,
+    name: keyof ProductFormValues,
+    props?: React.InputHTMLAttributes<HTMLInputElement>
+  ) {
     return (
       <div className="space-y-1.5">
         <label className="text-sm font-medium">{label}</label>
@@ -125,7 +133,7 @@ export function ProductForm({ product }: ProductFormProps) {
           )}
         />
         {errors[name] && (
-          <p className="text-xs text-destructive">{String(errors[name]?.message)}</p>
+          <p className="text-destructive text-xs">{String(errors[name]?.message)}</p>
         )}
       </div>
     );
@@ -147,8 +155,18 @@ export function ProductForm({ product }: ProductFormProps) {
       </div>
 
       <div className="grid grid-cols-2 gap-4">
-        {field("Stock", "stock", { type: "number", min: "0", step: "1" })}
-        {field("Low Stock Alert", "lowStockThreshold", { type: "number", min: "0", step: "1" })}
+        {field("Stock", "stock", { type: "number", min: "0", step: "any" })}
+        {field("Low Stock Alert", "lowStockThreshold", { type: "number", min: "0", step: "any" })}
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {field("Unit", "unit", { placeholder: "pc, kg, bag, cubic" })}
+        {field("Quantity Decimals", "quantityPrecision", {
+          type: "number",
+          min: "0",
+          max: "4",
+          step: "1",
+        })}
       </div>
 
       {field("Category", "category", { placeholder: "Beverages" })}
@@ -165,15 +183,15 @@ export function ProductForm({ product }: ProductFormProps) {
               className="h-16 w-16 rounded-md border object-cover"
             />
           ) : (
-            <div className="flex h-16 w-16 items-center justify-center rounded-md border bg-muted">
-              <ImageIcon className="h-6 w-6 text-muted-foreground" />
+            <div className="bg-muted flex h-16 w-16 items-center justify-center rounded-md border">
+              <ImageIcon className="text-muted-foreground h-6 w-6" />
             </div>
           )}
           <div className="flex-1 space-y-1">
             <label
               htmlFor="image-upload"
               className={cn(
-                "flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-accent transition-colors",
+                "hover:bg-accent flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors",
                 uploadLoading && "pointer-events-none opacity-50"
               )}
             >
@@ -187,7 +205,7 @@ export function ProductForm({ product }: ProductFormProps) {
                 onChange={handleImageUpload}
               />
             </label>
-            <p className="text-xs text-muted-foreground">JPEG, PNG, WebP up to 5 MB</p>
+            <p className="text-muted-foreground text-xs">JPEG, PNG, WebP up to 5 MB</p>
           </div>
         </div>
         {/* Hidden field for imageUrl */}
@@ -197,8 +215,15 @@ export function ProductForm({ product }: ProductFormProps) {
 
       <div className="flex items-center gap-2">
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        <input type="checkbox" id="active" {...registerField("active" as any)} className="h-4 w-4" />
-        <label htmlFor="active" className="text-sm font-medium">Active (visible in POS)</label>
+        <input
+          type="checkbox"
+          id="active"
+          {...registerField("active" as any)}
+          className="h-4 w-4"
+        />
+        <label htmlFor="active" className="text-sm font-medium">
+          Active (visible in POS)
+        </label>
       </div>
 
       <div className="flex gap-3 pt-2">

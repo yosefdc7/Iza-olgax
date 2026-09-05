@@ -10,7 +10,7 @@ interface HeldOrder {
   label: string | null;
   createdAt: string;
   cartSnapshot: {
-    items: Array<{ productId: string; name: string; price: number; quantity: number; stock: number }>;
+    items: Array<{ productId: string; name: string; price: number; quantity: number; stock: number; unit?: string; quantityPrecision?: number }>;
     discountAmount: number;
     discountType: "fixed" | "percent";
     paymentMethod: "CASH" | "CARD" | "OTHER";
@@ -48,7 +48,7 @@ export function HeldOrdersModal({ open, onClose }: HeldOrdersModalProps) {
   async function recallOrder(order: HeldOrder) {
     clearCart();
     const snap = order.cartSnapshot;
-    snap.items.forEach((i) => addItem(i));
+    snap.items.forEach((i) => addItem({ ...i, unit: i.unit ?? "pc", quantityPrecision: i.quantityPrecision ?? 0 }));
     setDiscount(snap.discountAmount, snap.discountType);
     setPaymentMethod(snap.paymentMethod);
     // Delete from server

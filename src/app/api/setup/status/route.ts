@@ -36,7 +36,7 @@ async function probeDb(): Promise<{
   } catch (err: any) {
     const message = err?.message ?? "Database not initialized";
     return {
-      connected: true,
+      connected: false,
       initialized: false,
       hasAdmin: false,
       setupComplete: false,

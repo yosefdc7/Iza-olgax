@@ -46,6 +46,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         taxRate: taxRate / 100,
         taxName,
         receiptFooter,
+        storageProvider: process.env.SUPABASE_URL ? "supabase" : "local",
+        storageBucket: process.env.SUPABASE_STORAGE_BUCKET ?? null,
         setupComplete: true,
       },
       update: {

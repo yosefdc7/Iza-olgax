@@ -35,12 +35,12 @@ export function StockAdjustModal({
   const [error, setError] = useState<string | null>(null);
 
   const selectedReason = REASONS.find((r) => r.value === reason)!;
-  const delta = selectedReason.sign * (parseInt(qty) || 0);
+  const delta = selectedReason.sign * (parseFloat(qty) || 0);
   const newStock = currentStock + delta;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const quantity = parseInt(qty);
+    const quantity = parseFloat(qty);
     if (!quantity || quantity <= 0) { setError("Quantity must be a positive number"); return; }
     setSaving(true);
     setError(null);

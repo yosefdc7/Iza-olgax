@@ -5,13 +5,23 @@ import { useTranslations } from "next-intl";
 import { useCartStore, PaymentMethod } from "@/store/cart";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
-import { PauseCircle, ClipboardList, SplitSquareHorizontal, X, Percent, RotateCcw, Star } from "lucide-react";
+import {
+  PauseCircle,
+  ClipboardList,
+  SplitSquareHorizontal,
+  X,
+  Percent,
+  RotateCcw,
+  Star,
+} from "lucide-react";
 
 interface PaymentPanelProps {
   taxRate: number;
   onClear: () => void;
   /** Called with the new sale ID after a successful sale â€” triggers receipt */
-  onSaleComplete?: (saleId: string) => void;
+  onSaleComplete?: (saleId: string, receiptReference: string) => void;
+  /** Clears the cart after an offline sale has been durably queued. */
+  onOfflineSaleQueued?: () => void;
   /** Open the heldâ€‘orders modal */
   onHoldOrders?: () => void;
   /** Optional customer to attach to the sale */
@@ -26,7 +36,14 @@ const TIP_PRESETS = [
 
 const PAYMENT_METHODS: PaymentMethod[] = ["CASH", "CARD", "OTHER"];
 
-export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, customerId }: PaymentPanelProps) {
+export function PaymentPanel({
+  taxRate,
+  onClear,
+  onSaleComplete,
+  onOfflineSaleQueued,
+  onHoldOrders,
+  customerId,
+}: PaymentPanelProps) {
   const t = useTranslations("pos");
   const router = useRouter();
   const {
@@ -58,9 +75,44 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
   const [loading, setLoading] = useState(false);
   const [holdLoading, setHoldLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [queuedMessage, setQueuedMessage] = useState<string | null>(null);
   const [customTip, setCustomTip] = useState("");
   const [showTaxEdit, setShowTaxEdit] = useState(false);
-  const [splitInput, setSplitInput] = useState<Record<PaymentMethod, string>>({ CASH: "", CARD: "", OTHER: "" });
+  const [splitInput, setSplitInput] = useState<Record<PaymentMethod, string>>({
+    CASH: "",
+    CARD: "",
+    OTHER: "",
+  });
+  const [receiptSeries, setReceiptSeries] = useState<
+    Array<{ id: string; name: string; nextNumber: number }>
+  >([]);
+  const [receiptSeriesId, setReceiptSeriesId] = useState("");
+
+  useEffect(() => {
+    fetch("/api/receipt-series")
+      .then((response) => response.json())
+      .then((data) => {
+        const active = data.series ?? [];
+        setReceiptSeries(active);
+        setReceiptSeriesId((current) => current || active[0]?.id || "");
+        try {
+          window.localStorage.setItem("izah-pos-receipt-series", JSON.stringify(active));
+        } catch {
+          // Local cache is best-effort.
+        }
+      })
+      .catch(() => {
+        try {
+          const cached = JSON.parse(
+            window.localStorage.getItem("izah-pos-receipt-series") ?? "[]"
+          ) as Array<{ id: string; name: string; nextNumber: number }>;
+          setReceiptSeries(cached);
+          setReceiptSeriesId((current) => current || cached[0]?.id || "");
+        } catch {
+          setReceiptSeries([]);
+        }
+      });
+  }, []);
 
   // Loyalty state
   const [loyaltyInfo, setLoyaltyInfo] = useState<{
@@ -72,20 +124,30 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
   } | null>(null);
 
   useEffect(() => {
-    if (!customerId) { setLoyaltyInfo(null); setLoyaltyPointsUsed(0); return; }
+    if (!customerId) {
+      setLoyaltyInfo(null);
+      setLoyaltyPointsUsed(0);
+      return;
+    }
     fetch(`/api/loyalty?customerId=${customerId}`)
       .then((r) => r.json())
       .then((d) => {
         if (d.enabled) setLoyaltyInfo(d);
-        else { setLoyaltyInfo(null); setLoyaltyPointsUsed(0); }
+        else {
+          setLoyaltyInfo(null);
+          setLoyaltyPointsUsed(0);
+        }
       })
-      .catch(() => { setLoyaltyInfo(null); });
+      .catch(() => {
+        setLoyaltyInfo(null);
+      });
   }, [customerId, setLoyaltyPointsUsed]);
 
   // Loyalty discount in dollars
-  const loyaltyDiscount = loyaltyInfo && loyaltyPointsUsed > 0
-    ? Math.min(loyaltyPointsUsed / loyaltyInfo.redeemValue, loyaltyInfo.maxRedeemDiscount)
-    : 0;
+  const loyaltyDiscount =
+    loyaltyInfo && loyaltyPointsUsed > 0
+      ? Math.min(loyaltyPointsUsed / loyaltyInfo.redeemValue, loyaltyInfo.maxRedeemDiscount)
+      : 0;
 
   const tot = total(taxRate);
   const change = changeDue(taxRate);
@@ -124,13 +186,21 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
 
   async function handleCompleteSale() {
     if (isEmpty) return;
+    if (!receiptSeriesId) {
+      setError(
+        "An active receipt series is required. Ask an administrator to configure one in Settings."
+      );
+      return;
+    }
     setError(null);
+    setQueuedMessage(null);
     setLoading(true);
 
     const { items: cartItems, discountAmount, discountType, note } = useCartStore.getState();
 
     try {
       const body: Record<string, unknown> = {
+        receiptSeriesId,
         items: cartItems.map((i) => ({
           productId: i.productId,
           name: i.name,
@@ -154,11 +224,22 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
         if (paymentMethod === "CASH") body.amountTendered = amountTendered || tot;
       }
 
-      const res = await fetch("/api/sales", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
+      let res: Response;
+      try {
+        res = await fetch("/api/sales", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      } catch (networkError) {
+        const offline = typeof navigator !== "undefined" && !navigator.onLine;
+        if (!offline && !(networkError instanceof TypeError)) throw networkError;
+        const { enqueueOfflineWrite } = await import("@/lib/pglite");
+        await enqueueOfflineWrite("/api/sales", "POST", body);
+        onOfflineSaleQueued?.();
+        setQueuedMessage("Offline — sale saved and will sync when the connection returns.");
+        return;
+      }
 
       if (!res.ok) {
         const resp = await res.json();
@@ -169,7 +250,9 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
       const saleId: string = resp.sale?.id ?? "";
 
       if (onSaleComplete) {
-        onSaleComplete(saleId);
+        const selected = receiptSeries.find((series) => series.id === receiptSeriesId);
+        const number = Number(resp.sale?.receiptNumber ?? 0);
+        onSaleComplete(saleId, `${selected?.name ?? "Receipt"}-${String(number).padStart(6, "0")}`);
       } else {
         onClear();
       }
@@ -202,20 +285,38 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
   }
 
   return (
-    <div className="border-t p-4 space-y-3">
+    <div className="space-y-3 border-t p-4">
+      <div className="space-y-1">
+        <label htmlFor="receipt-series" className="text-muted-foreground text-xs font-medium">
+          Receipt series
+        </label>
+        <select
+          id="receipt-series"
+          value={receiptSeriesId}
+          onChange={(event) => setReceiptSeriesId(event.target.value)}
+          className="bg-background h-9 w-full rounded-md border px-2 text-sm"
+        >
+          {receiptSeries.length === 0 && <option value="">No active series configured</option>}
+          {receiptSeries.map((series) => (
+            <option key={series.id} value={series.id}>
+              {series.name} · next {String(series.nextNumber).padStart(6, "0")}
+            </option>
+          ))}
+        </select>
+      </div>
       {/* Hold / Recall row */}
       <div className="flex gap-2">
         <button
           onClick={handleHoldOrder}
           disabled={isEmpty || holdLoading}
-          className="flex-1 flex items-center justify-center gap-1 rounded-md border py-2 text-xs font-medium text-muted-foreground hover:bg-accent disabled:opacity-50 disabled:pointer-events-none transition-colors"
+          className="text-muted-foreground hover:bg-accent flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors disabled:pointer-events-none disabled:opacity-50"
         >
           <PauseCircle className="h-3.5 w-3.5" />
           {holdLoading ? "..." : t("hold")}
         </button>
         <button
           onClick={onHoldOrders}
-          className="flex-1 flex items-center justify-center gap-1 rounded-md border py-2 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+          className="text-muted-foreground hover:bg-accent flex flex-1 items-center justify-center gap-1 rounded-md border py-2 text-xs font-medium transition-colors"
         >
           <ClipboardList className="h-3.5 w-3.5" />
           Recall
@@ -226,11 +327,14 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
       {!isEmpty && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Tip</span>
+            <span className="text-muted-foreground text-xs font-medium">Tip</span>
             {tipAmount > 0 && (
               <button
-                onClick={() => { setTipAmount(0); setCustomTip(""); }}
-                className="text-xs text-muted-foreground hover:text-destructive"
+                onClick={() => {
+                  setTipAmount(0);
+                  setCustomTip("");
+                }}
+                className="text-muted-foreground hover:text-destructive text-xs"
               >
                 Remove
               </button>
@@ -243,8 +347,8 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                 onClick={() => handleTipPreset(p.value)}
                 className={
                   activeTipPct === p.value && customTip === ""
-                    ? "flex-1 rounded-md border-2 border-primary bg-primary/10 py-1.5 text-xs font-semibold text-primary"
-                    : "flex-1 rounded-md border py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+                    ? "border-primary bg-primary/10 text-primary flex-1 rounded-md border-2 py-1.5 text-xs font-semibold"
+                    : "text-muted-foreground hover:bg-accent flex-1 rounded-md border py-1.5 text-xs font-medium transition-colors"
                 }
               >
                 {p.label}
@@ -257,7 +361,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
               value={customTip}
               onChange={(e) => handleCustomTip(e.target.value)}
               placeholder="Custom"
-              className="w-20 rounded-md border px-2 py-1.5 text-xs text-center bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              className="bg-background focus:ring-ring w-20 rounded-md border px-2 py-1.5 text-center text-xs focus:ring-2 focus:outline-none"
             />
           </div>
         </div>
@@ -267,9 +371,9 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
       {!isEmpty && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">Tax</span>
+            <span className="text-muted-foreground text-xs font-medium">Tax</span>
             <div className="flex items-center gap-2">
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground cursor-pointer">
+              <label className="text-muted-foreground flex cursor-pointer items-center gap-1.5 text-xs">
                 <input
                   type="checkbox"
                   checked={taxRateOverride === 0}
@@ -281,13 +385,13 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                       setTaxRate(null);
                     }
                   }}
-                  className="h-3 w-3 accent-primary"
+                  className="accent-primary h-3 w-3"
                 />
                 Tax Exempt
               </label>
               <button
                 onClick={() => setShowTaxEdit((v) => !v)}
-                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+                className="text-muted-foreground hover:text-primary flex items-center gap-1 text-xs transition-colors"
               >
                 <Percent className="h-3 w-3" />
                 {taxRateOverride !== null
@@ -296,7 +400,10 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
               </button>
               {taxRateOverride !== null && (
                 <button
-                  onClick={() => { setTaxRate(null); setShowTaxEdit(false); }}
+                  onClick={() => {
+                    setTaxRate(null);
+                    setShowTaxEdit(false);
+                  }}
                   className="text-muted-foreground hover:text-destructive"
                   title="Reset to default"
                 >
@@ -312,15 +419,15 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                 min={0}
                 max={100}
                 step={0.5}
-                value={taxRateOverride !== null ? (taxRateOverride * 100) : (taxRate * 100)}
+                value={taxRateOverride !== null ? taxRateOverride * 100 : taxRate * 100}
                 onChange={(e) => {
                   const val = parseFloat(e.target.value);
                   if (!isNaN(val) && val >= 0 && val <= 100) setTaxRate(val / 100);
                 }}
-                className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+                className="bg-background focus:ring-ring flex-1 rounded-md border px-2 py-1.5 text-xs focus:ring-2 focus:outline-none"
                 placeholder="Rate %"
               />
-              <span className="text-xs text-muted-foreground">%</span>
+              <span className="text-muted-foreground text-xs">%</span>
             </div>
           )}
         </div>
@@ -330,7 +437,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
       {!isEmpty && loyaltyInfo?.enabled && loyaltyInfo.points > 0 && (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
-            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+            <span className="text-muted-foreground flex items-center gap-1 text-xs font-medium">
               <Star className="h-3 w-3 text-yellow-500" /> Loyalty Points
             </span>
             <span className="text-xs font-semibold">{loyaltyInfo.points} pts available</span>
@@ -344,15 +451,15 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
               value={loyaltyPointsUsed || ""}
               onChange={(e) => setLoyaltyPointsUsed(parseInt(e.target.value) || 0)}
               placeholder="Points to redeem"
-              className="flex-1 rounded-md border bg-background px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
+              className="bg-background focus:ring-ring flex-1 rounded-md border px-2 py-1.5 text-xs focus:ring-2 focus:outline-none"
             />
             {loyaltyPointsUsed > 0 && (
-              <span className="text-xs text-green-600 font-medium">
+              <span className="text-xs font-medium text-green-600">
                 -{formatCurrency(loyaltyDiscount)}
               </span>
             )}
           </div>
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-muted-foreground text-[10px]">
             {loyaltyInfo.earnRate} pt per $1 Â· {loyaltyInfo.redeemValue} pts = $1 off
           </p>
         </div>
@@ -361,7 +468,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
       {/* Payment method / split toggle */}
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-muted-foreground">Payment</span>
+          <span className="text-muted-foreground text-xs font-medium">Payment</span>
           <button
             onClick={() => {
               if (splitMode) {
@@ -373,7 +480,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                 setSplitInput((prev) => ({ ...prev, [paymentMethod]: String(tot.toFixed(2)) }));
               }
             }}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
+            className="text-muted-foreground hover:text-primary flex items-center gap-1 text-xs transition-colors"
           >
             <SplitSquareHorizontal className="h-3.5 w-3.5" />
             {splitMode ? "Single" : "Split"}
@@ -387,9 +494,11 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
               const line = paymentLines.find((p) => p.method === method);
               return (
                 <div key={method} className="flex items-center gap-2">
-                  <span className={`w-14 rounded-md border text-center py-1.5 text-xs font-medium ${
-                    line ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"
-                  }`}>
+                  <span
+                    className={`w-14 rounded-md border py-1.5 text-center text-xs font-medium ${
+                      line ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground"
+                    }`}
+                  >
                     {method}
                   </span>
                   <input
@@ -399,11 +508,14 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                     value={splitInput[method]}
                     onChange={(e) => handleSplitInput(method, e.target.value)}
                     placeholder="0.00"
-                    className="flex-1 rounded-md border px-2 py-1.5 text-xs bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+                    className="bg-background focus:ring-ring flex-1 rounded-md border px-2 py-1.5 text-xs focus:ring-2 focus:outline-none"
                   />
                   {line && (
                     <button
-                      onClick={() => { removePaymentLine(method); setSplitInput((prev) => ({ ...prev, [method]: "" })); }}
+                      onClick={() => {
+                        removePaymentLine(method);
+                        setSplitInput((prev) => ({ ...prev, [method]: "" }));
+                      }}
                       className="text-muted-foreground hover:text-destructive"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -412,14 +524,21 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                 </div>
               );
             })}
-            <div className="flex justify-between text-xs pt-1">
+            <div className="flex justify-between pt-1 text-xs">
               <span className="text-muted-foreground">
-                Remaining: <span className={splitRemaining > 0 ? "text-destructive font-semibold" : "text-green-600 font-semibold"}>
+                Remaining:{" "}
+                <span
+                  className={
+                    splitRemaining > 0
+                      ? "text-destructive font-semibold"
+                      : "font-semibold text-green-600"
+                  }
+                >
                   {formatCurrency(splitRemaining)}
                 </span>
               </span>
               {change > 0 && (
-                <span className="text-green-600 font-medium">Change: {formatCurrency(change)}</span>
+                <span className="font-medium text-green-600">Change: {formatCurrency(change)}</span>
               )}
             </div>
           </div>
@@ -433,8 +552,8 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                   onClick={() => setPaymentMethod(method)}
                   className={
                     paymentMethod === method
-                      ? "flex-1 rounded-md border-2 border-primary bg-primary/10 py-2 text-xs font-semibold text-primary"
-                      : "flex-1 rounded-md border py-2 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+                      ? "border-primary bg-primary/10 text-primary flex-1 rounded-md border-2 py-2 text-xs font-semibold"
+                      : "text-muted-foreground hover:bg-accent flex-1 rounded-md border py-2 text-xs font-medium transition-colors"
                   }
                 >
                   {method}
@@ -444,7 +563,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
 
             {paymentMethod === "CASH" && (
               <div className="space-y-1">
-                <label className="text-xs text-muted-foreground">Amount Tendered</label>
+                <label className="text-muted-foreground text-xs">Amount Tendered</label>
                 <input
                   type="number"
                   min={0}
@@ -455,7 +574,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                   className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
                 />
                 {change > 0 && (
-                  <p className="text-sm text-green-600 font-medium">
+                  <p className="text-sm font-medium text-green-600">
                     Change: {formatCurrency(change)}
                   </p>
                 )}
@@ -467,31 +586,31 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
 
       {/* Totals breakdown */}
       {!isEmpty && (
-        <div className="rounded-md bg-muted/40 px-3 py-2 space-y-1 text-xs">
-          <div className="flex justify-between text-muted-foreground">
+        <div className="bg-muted/40 space-y-1 rounded-md px-3 py-2 text-xs">
+          <div className="text-muted-foreground flex justify-between">
             <span>Subtotal</span>
             <span>{formatCurrency(subtotal())}</span>
           </div>
           {discountValue() > 0 && (
-            <div className="flex justify-between text-muted-foreground">
+            <div className="text-muted-foreground flex justify-between">
               <span>Discount</span>
               <span>âˆ’{formatCurrency(discountValue())}</span>
             </div>
           )}
           {sub > 0 && (
-            <div className="relative flex justify-between text-muted-foreground">
+            <div className="text-muted-foreground relative flex justify-between">
               <button
                 onClick={() => setShowTaxEdit(!showTaxEdit)}
-                className="flex items-center gap-1.5 hover:text-foreground transition-colors group"
+                className="hover:text-foreground group flex items-center gap-1.5 transition-colors"
                 title="Edit tax rate"
               >
                 <span>Tax</span>
                 {taxRateOverride !== null ? (
-                  <span className="text-[10px] bg-blue-100 text-blue-700 px-1 rounded dark:bg-blue-900 dark:text-blue-100 font-medium">
+                  <span className="rounded bg-blue-100 px-1 text-[10px] font-medium text-blue-700 dark:bg-blue-900 dark:text-blue-100">
                     {taxRateOverride === 0 ? "Exempt" : `${(taxRateOverride * 100).toFixed(2)}%`}
                   </span>
                 ) : (
-                  <span className="text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-0.5">
+                  <span className="flex items-center gap-0.5 text-[10px] opacity-0 transition-opacity group-hover:opacity-100">
                     <Percent className="h-3 w-3" />
                     {(taxRate * 100).toFixed(taxRate % 1 === 0 ? 0 : 1)}%
                   </span>
@@ -502,21 +621,24 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
               {showTaxEdit && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setShowTaxEdit(false)} />
-                  <div className="absolute left-0 bottom-full mb-2 w-52 rounded-lg border border-border bg-popover p-3 shadow-xl z-50 ring-1 ring-border/10 animate-in fade-in zoom-in-95">
+                  <div className="border-border bg-popover ring-border/10 animate-in fade-in zoom-in-95 absolute bottom-full left-0 z-50 mb-2 w-52 rounded-lg border p-3 shadow-xl ring-1">
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-semibold text-foreground">Tax Rate Override</p>
-                        <button onClick={() => setShowTaxEdit(false)} className="text-muted-foreground hover:text-foreground">
+                        <p className="text-foreground text-xs font-semibold">Tax Rate Override</p>
+                        <button
+                          onClick={() => setShowTaxEdit(false)}
+                          className="text-muted-foreground hover:text-foreground"
+                        >
                           <X className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      
+
                       <div className="flex gap-2">
                         <div className="relative flex-1">
                           <input
                             type="number"
                             placeholder={(taxRate * 100).toString()}
-                            className="w-full rounded-md border bg-background px-2 py-1.5 text-xs pr-6"
+                            className="bg-background w-full rounded-md border px-2 py-1.5 pr-6 text-xs"
                             autoFocus
                             onKeyDown={(e) => {
                               if (e.key === "Enter") {
@@ -528,38 +650,49 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
                               }
                             }}
                           />
-                          <span className="absolute right-2 top-1.5 text-xs text-muted-foreground">%</span>
+                          <span className="text-muted-foreground absolute top-1.5 right-2 text-xs">
+                            %
+                          </span>
                         </div>
-                        <button 
+                        <button
                           onClick={(e) => {
-                            const input = e.currentTarget.previousElementSibling?.querySelector('input');
+                            const input =
+                              e.currentTarget.previousElementSibling?.querySelector("input");
                             if (input) {
-                               const val = parseFloat(input.value);
-                               if (!isNaN(val)) {
-                                 setTaxRate(val / 100);
-                                 setShowTaxEdit(false);
-                               }
+                              const val = parseFloat(input.value);
+                              if (!isNaN(val)) {
+                                setTaxRate(val / 100);
+                                setShowTaxEdit(false);
+                              }
                             }
                           }}
-                          className="px-2 py-1 bg-primary text-primary-foreground text-xs rounded-md"
-                        >Set</button>
+                          className="bg-primary text-primary-foreground rounded-md px-2 py-1 text-xs"
+                        >
+                          Set
+                        </button>
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <button
-                          onClick={() => { setTaxRate(0); setShowTaxEdit(false); }}
+                          onClick={() => {
+                            setTaxRate(0);
+                            setShowTaxEdit(false);
+                          }}
                           className={`flex items-center justify-center gap-1 rounded border py-1.5 text-[10px] transition-colors ${
-                            taxRateOverride === 0 
-                              ? "bg-destructive/10 text-destructive border-destructive/20" 
+                            taxRateOverride === 0
+                              ? "bg-destructive/10 text-destructive border-destructive/20"
                               : "bg-muted/50 hover:bg-destructive/10 hover:text-destructive"
                           }`}
                         >
                           <X className="h-3 w-3" /> Exempt
                         </button>
                         <button
-                          onClick={() => { setTaxRate(null); setShowTaxEdit(false); }}
+                          onClick={() => {
+                            setTaxRate(null);
+                            setShowTaxEdit(false);
+                          }}
                           disabled={taxRateOverride === null}
-                          className="flex items-center justify-center gap-1 rounded border bg-muted/50 py-1.5 text-[10px] hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="bg-muted/50 hover:text-primary flex items-center justify-center gap-1 rounded border py-1.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <RotateCcw className="h-3 w-3" /> Reset
                         </button>
@@ -571,26 +704,27 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
             </div>
           )}
           {tipAmount > 0 && (
-            <div className="flex justify-between text-muted-foreground">
+            <div className="text-muted-foreground flex justify-between">
               <span>Tip</span>
               <span>{formatCurrency(tipAmount)}</span>
             </div>
           )}
-          <div className="flex justify-between font-semibold text-foreground border-t pt-1 mt-1">
+          <div className="text-foreground mt-1 flex justify-between border-t pt-1 font-semibold">
             <span>Total</span>
             <span>{formatCurrency(tot)}</span>
           </div>
         </div>
       )}
 
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && <p className="text-destructive text-xs">{error}</p>}
+      {queuedMessage && <p className="text-xs text-green-600">{queuedMessage}</p>}
 
       {/* Complete sale */}
       <button
         data-charge-btn
         onClick={handleCompleteSale}
         disabled={isEmpty || loading || (splitMode && splitRemaining > 0.005)}
-        className="w-full rounded-md bg-primary py-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 transition-colors disabled:pointer-events-none disabled:opacity-50"
+        className="bg-primary text-primary-foreground hover:bg-primary/90 w-full rounded-md py-3 text-sm font-semibold transition-colors disabled:pointer-events-none disabled:opacity-50"
       >
         {loading ? "Processingâ€¦" : `${t("checkout")} ${formatCurrency(tot)}`}
       </button>
@@ -599,7 +733,7 @@ export function PaymentPanel({ taxRate, onClear, onSaleComplete, onHoldOrders, c
       {!isEmpty && (
         <button
           onClick={onClear}
-          className="w-full rounded-md border py-2 text-xs text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+          className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive w-full rounded-md border py-2 text-xs transition-colors"
         >
           {t("void")}
         </button>

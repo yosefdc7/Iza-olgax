@@ -37,6 +37,7 @@ POST /api/auth/sign-in/email
 ```
 
 **Body:**
+
 ```json
 {
   "email": "admin@example.com",
@@ -45,6 +46,7 @@ POST /api/auth/sign-in/email
 ```
 
 **Success Response:**
+
 ```json
 {
   "token": "...",
@@ -60,6 +62,7 @@ POST /api/auth/sign-in/email
 On success, a `better-auth.session_token` cookie is set automatically. The app uses `window.location.href = "/pos"` to force a hard redirect so the cookie is captured on the very next request.
 
 **Error Response (400 / 401):**
+
 ```json
 {
   "error": { "message": "Invalid email or password", "status": 401 }
@@ -87,6 +90,7 @@ GET /api/auth/get-session
 Returns the current user session or `null`.
 
 **Success Response:**
+
 ```json
 {
   "user": {
@@ -115,11 +119,12 @@ Search products by name, SKU, or barcode. Used by the POS product picker and bar
 
 **Query Parameters:**
 
-| Parameter | Required | Description |
-|---|---|---|
-| `q` | Yes | Search string — matched against name (case-insensitive contains), SKU (contains), and barcode (exact). |
+| Parameter | Required | Description                                                                                            |
+| --------- | -------- | ------------------------------------------------------------------------------------------------------ |
+| `q`       | Yes      | Search string — matched against name (case-insensitive contains), SKU (contains), and barcode (exact). |
 
 **Response:**
+
 ```json
 [
   {
@@ -127,7 +132,7 @@ Search products by name, SKU, or barcode. Used by the POS product picker and bar
     "name": "Americano",
     "sku": "BEV-001",
     "barcode": "12345678",
-    "price": 4.50,
+    "price": 4.5,
     "stock": 100
   }
 ]
@@ -145,12 +150,12 @@ List completed sales. Supports date range filtering and pagination.
 
 **Query Parameters:**
 
-| Parameter | Description |
-|---|---|
-| `from` | ISO date string — start of date range (inclusive) |
-| `to` | ISO date string — end of date range (inclusive) |
-| `limit` | Max results (default 100) |
-| `offset` | Pagination offset |
+| Parameter | Description                                       |
+| --------- | ------------------------------------------------- |
+| `from`    | ISO date string — start of date range (inclusive) |
+| `to`      | ISO date string — end of date range (inclusive)   |
+| `limit`   | Max results (default 100)                         |
+| `offset`  | Pagination offset                                 |
 
 **Response:** Array of sale objects including items, customer, and payment details.
 
@@ -161,21 +166,23 @@ List completed sales. Supports date range filtering and pagination.
 Creates a new completed sale. Called at checkout when the cashier confirms payment.
 
 **Body:**
+
 ```json
 {
   "items": [
-    { "productId": "...", "name": "Americano", "price": 4.50, "quantity": 2 },
-    { "productId": "...", "name": "Croissant",  "price": 3.00, "quantity": 1, "notes": "no butter" }
+    { "productId": "...", "name": "Americano", "price": 4.5, "quantity": 2 },
+    { "productId": "...", "name": "Croissant", "price": 3.0, "quantity": 1, "notes": "no butter" }
   ],
+  "receiptSeriesId": "clxyz-series",
   "paymentMethod": "CASH",
-  "amountTendered": 20.00,
+  "amountTendered": 20.0,
   "paymentLines": [
-    { "method": "CASH", "amount": 10.00 },
-    { "method": "CARD", "amount": 2.00 }
+    { "method": "CASH", "amount": 10.0 },
+    { "method": "CARD", "amount": 2.0 }
   ],
   "tipAmount": 0,
   "taxRate": 0.16,
-  "discountAmount": 5.00,
+  "discountAmount": 5.0,
   "discountType": "fixed",
   "note": "Table 4",
   "customerId": "clxyz...",
@@ -184,16 +191,20 @@ Creates a new completed sale. Called at checkout when the cashier confirms payme
 ```
 
 - `paymentMethod` — primary method if not split (`CASH | CARD | OTHER`)
+- `receiptSeriesId` — required active receipt series; its next number is assigned atomically when the sale transaction commits
+- item `quantity` supports decimals subject to the product's configured quantity precision
 - `paymentLines` — optional split-tender breakdown (overrides `paymentMethod` with the largest line's method)
 - `discountType` — `"fixed"` (dollar amount) or `"percent"` (percentage of subtotal)
 - `loyaltyPointsUsed` — integer; converted to discount at the configured redemption rate
 
 **Success Response:**
+
 ```json
 { "ok": true, "saleId": "clxyz..." }
 ```
 
 **Error Response (400):**
+
 ```json
 { "error": { "fieldErrors": { "items": ["Required"] } } }
 ```
@@ -213,19 +224,22 @@ Downloads the sales list as a UTF-8 CSV file. Supports the same `from`/`to` quer
 Issues a full or partial refund on a completed sale. Updates the sale status to `REFUNDED`.
 
 **Body:**
+
 ```json
 {
-  "amount": 4.50,
+  "amount": 4.5,
   "reason": "Customer changed mind"
 }
 ```
 
 **Success Response:**
+
 ```json
 { "ok": true }
 ```
 
 **Error Responses:**
+
 ```json
 { "error": "Sale not found" }                         // 404
 { "error": "Sale is not in a refundable state" }      // 400
@@ -249,6 +263,7 @@ List all customers, ordered by name. Optionally filter with `?q=` search query.
 Create a new customer.
 
 **Body:**
+
 ```json
 {
   "name": "Jane Smith",
@@ -259,6 +274,7 @@ Create a new customer.
 ```
 
 **Success Response:**
+
 ```json
 { "ok": true, "id": "clxyz..." }
 ```
@@ -294,6 +310,7 @@ Returns groups of potential duplicate customer records, matched by name similari
 Merges two customer records into one, consolidating loyalty points and purchase history.
 
 **Body:**
+
 ```json
 {
   "keepId": "clxyz...",
@@ -336,6 +353,7 @@ The hold-order queue allows pausing a cart to serve another customer.
 Returns all currently held orders.
 
 **Response:**
+
 ```json
 [
   {
@@ -352,6 +370,7 @@ Returns all currently held orders.
 Save the current cart as a held order.
 
 **Body:**
+
 ```json
 {
   "label": "Table 3",
@@ -372,6 +391,7 @@ Delete a held order by ID. Pass `?id=` as a query parameter.
 Manually adjust loyalty points for a customer (admin operation).
 
 **Body:**
+
 ```json
 {
   "customerId": "clxyz...",
@@ -393,6 +413,7 @@ List stock adjustment records. Supports `?productId=` to filter by product.
 Record a manual stock adjustment (e.g. receiving stock, damage write-off).
 
 **Body:**
+
 ```json
 {
   "productId": "clxyz...",
@@ -413,6 +434,7 @@ Valid reasons: `RECEIVED`, `DAMAGED`, `THEFT`, `CORRECTION`, `OPENING_COUNT`.
 Returns public business settings (name, logo URL, currency, tax name, receipt footer). **No authentication required** — used to populate the login/setup screens.
 
 **Response:**
+
 ```json
 {
   "name": "My Coffee Shop",
@@ -440,12 +462,13 @@ Upload an image file (logo or product photo). Accepts `multipart/form-data`.
 
 **Form fields:**
 
-| Field | Description |
-|---|---|
+| Field  | Description                                  |
+| ------ | -------------------------------------------- |
 | `file` | Image file (JPEG, PNG, WebP, GIF — max 5 MB) |
-| `type` | `"logo"` or `"product"` |
+| `type` | `"logo"` or `"product"`                      |
 
 **Success Response:**
+
 ```json
 { "url": "/uploads/logo-1741430400000.png" }
 ```
@@ -460,21 +483,20 @@ Returns aggregated sales statistics. All calculations are server-side.
 
 **Query Parameters:**
 
-| Parameter | Description |
-|---|---|
-| `from` | ISO date — start of period |
-| `to` | ISO date — end of period |
+| Parameter | Description                |
+| --------- | -------------------------- |
+| `from`    | ISO date — start of period |
+| `to`      | ISO date — end of period   |
 
 **Response:**
+
 ```json
 {
   "totalRevenue": 1234.56,
   "totalSales": 42,
   "averageOrderValue": 29.39,
-  "paymentBreakdown": { "CASH": 800.00, "CARD": 400.00, "OTHER": 34.56 },
-  "topProducts": [
-    { "name": "Americano", "quantity": 120, "revenue": 540.00 }
-  ]
+  "paymentBreakdown": { "CASH": 800.0, "CARD": 400.0, "OTHER": 34.56 },
+  "topProducts": [{ "name": "Americano", "quantity": 120, "revenue": 540.0 }]
 }
 ```
 
@@ -487,6 +509,7 @@ Returns aggregated sales statistics. All calculations are server-side.
 Returns database connectivity status. Used by the setup wizard and monitoring tools.
 
 **Response:**
+
 ```json
 { "ok": true, "db": true }
 ```
@@ -504,6 +527,7 @@ These endpoints are only accessible during the initial setup flow (before `setup
 Probes the database connection and returns the current setup state. Called by the setup wizard on load to determine which steps to show.
 
 **Response:**
+
 ```json
 {
   "envOk": true,
@@ -516,15 +540,15 @@ Probes the database connection and returns the current setup state. Called by th
 }
 ```
 
-| Field | Type | Description |
-|---|---|---|
-| `envOk` | boolean | `true` if `DATABASE_URL` and `BETTER_AUTH_SECRET` are set |
-| `dbConnected` | boolean | `true` if a TCP connection to Postgres was established |
-| `dbInitialized` | boolean | `true` if Prisma migrations have been applied |
-| `hasAdmin` | boolean | `true` if at least one user with `role = ADMIN` exists |
-| `setupComplete` | boolean | `true` if `BusinessSettings.setupComplete = true` in the DB |
-| `missingEnv` | string[] | List of missing required environment variable names |
-| `dbError` | string \| null | Human-readable database error message if connection failed |
+| Field           | Type           | Description                                                 |
+| --------------- | -------------- | ----------------------------------------------------------- |
+| `envOk`         | boolean        | `true` if `DATABASE_URL` and `BETTER_AUTH_SECRET` are set   |
+| `dbConnected`   | boolean        | `true` if a TCP connection to Postgres was established      |
+| `dbInitialized` | boolean        | `true` if Prisma migrations have been applied               |
+| `hasAdmin`      | boolean        | `true` if at least one user with `role = ADMIN` exists      |
+| `setupComplete` | boolean        | `true` if `BusinessSettings.setupComplete = true` in the DB |
+| `missingEnv`    | string[]       | List of missing required environment variable names         |
+| `dbError`       | string \| null | Human-readable database error message if connection failed  |
 
 If `setupComplete` is `true`, this endpoint also sets the `izah-setup-complete` cookie to heal any client state where the cookie was missing.
 
@@ -532,18 +556,44 @@ If `setupComplete` is `true`, this endpoint also sets the `izah-setup-complete` 
 
 ### POST /api/setup/migrate
 
-Runs `prisma migrate deploy` programmatically to initialize / apply database migrations.
+Runs local development database initialization. Production requests are rejected
+with `410 Gone`; migrations must run from the controlled deployment step before
+the first production request.
 
 **Body:** empty `{}`
 
 **Success Response:**
+
 ```json
 { "ok": true }
 ```
 
 **Error Response (403):**
+
 ```json
 { "error": "Setup already complete" }
+```
+
+### GET /api/reports/daily-ledger
+
+Returns the receipt-grouped Daily Sales Ledger. Admins can filter all sales and receive cost/profit fields. Cashiers are forcibly scoped to their own current business day and never receive cost/profit fields.
+
+Query parameters: `from`, `to`, `seriesId`, `cashierId`, `status`, `q`, `page`, `pageSize`, and `format=csv`.
+
+Business-day boundaries use the configured business timezone. Legacy rows are marked `Backfilled estimate` in JSON and CSV.
+
+### GET/POST/PATCH /api/receipt-series
+
+- `GET`: authenticated users receive usable series; admins also receive inactive series.
+- `POST`: admin creates a unique series with `{ "name": "211", "nextNumber": 1 }`.
+- `PATCH`: admin activates or deactivates a series with `{ "id": "...", "active": false }`.
+
+Issued numbers are never reused after a committed sale, void, or refund.
+
+**Production response (410):**
+
+```json
+{ "error": "Database migrations must be run before deployment." }
 ```
 
 ---
@@ -553,6 +603,7 @@ Runs `prisma migrate deploy` programmatically to initialize / apply database mig
 Creates the first admin user account.
 
 **Body:**
+
 ```json
 {
   "name": "Store Owner",
@@ -562,11 +613,13 @@ Creates the first admin user account.
 ```
 
 **Success Response:**
+
 ```json
 { "ok": true }
 ```
 
 **Error Responses:**
+
 ```json
 { "error": "Setup already complete" }       // 403 — setup is done
 { "error": "Admin already exists" }          // 409 — another admin exists
@@ -580,6 +633,7 @@ Creates the first admin user account.
 Saves business settings and marks setup as complete. Also sets the `izah-setup-complete` cookie so the middleware knows setup is done without a DB round-trip on every request.
 
 **Body:**
+
 ```json
 {
   "businessName": "My Coffee Shop",
@@ -592,11 +646,13 @@ Saves business settings and marks setup as complete. Also sets the `izah-setup-c
 ```
 
 **Success Response (sets `izah-setup-complete` cookie):**
+
 ```json
 { "ok": true }
 ```
 
 **Error Response (403):**
+
 ```json
 { "error": "Setup already complete" }
 ```
@@ -610,6 +666,7 @@ Saves business settings and marks setup as complete. Also sets the `izah-setup-c
 Retrieve a list of all users. **Requires Admin role.**
 
 **Success Response:**
+
 ```json
 {
   "users": [
@@ -632,6 +689,7 @@ Retrieve a list of all users. **Requires Admin role.**
 Create a new user account. **Requires Admin role.**
 
 **Body:**
+
 ```json
 {
   "name": "Cashier User",
@@ -642,6 +700,7 @@ Create a new user account. **Requires Admin role.**
 ```
 
 **Success Response (201 Created):**
+
 ```json
 {
   "user": {
@@ -661,6 +720,7 @@ Create a new user account. **Requires Admin role.**
 Update another user's details. **Requires Admin role.**
 
 **Body:**
+
 ```json
 {
   "name": "Updated Name",
@@ -670,6 +730,7 @@ Update another user's details. **Requires Admin role.**
 ```
 
 **Success Response:**
+
 ```json
 {
   "id": "clxyz...",
@@ -689,6 +750,7 @@ Delete a user account. **Requires Admin role.**
 > Note: You cannot delete your own account, nor can you delete the last Admin account.
 
 **Success Response:**
+
 ```json
 {
   "ok": true
@@ -702,6 +764,7 @@ Delete a user account. **Requires Admin role.**
 Update the currently logged-in user's profile details. **Requires an authenticated session.**
 
 **Body:**
+
 ```json
 {
   "name": "New Name",
@@ -710,6 +773,7 @@ Update the currently logged-in user's profile details. **Requires an authenticat
 ```
 
 **Success Response:**
+
 ```json
 {
   "user": {
@@ -729,6 +793,7 @@ Update the currently logged-in user's profile details. **Requires an authenticat
 Change the currently logged-in user's password. **Requires an authenticated session.**
 
 **Body:**
+
 ```json
 {
   "currentPassword": "oldPassword123",
@@ -737,6 +802,7 @@ Change the currently logged-in user's password. **Requires an authenticated sess
 ```
 
 **Success Response:**
+
 ```json
 {
   "message": "Password changed successfully"
@@ -756,6 +822,7 @@ All API errors follow this structure:
 ```
 
 HTTP status codes used:
+
 - `200` — success
 - `400` — bad request / validation error
 - `401` — authentication required

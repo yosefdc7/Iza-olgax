@@ -28,7 +28,7 @@ cp .env.example .env
 
 # Set up the database
 pnpm db:migrate
-pnpm db:seed
+pnpm db:seed:catalog
 
 # Start the development server
 pnpm dev

@@ -163,7 +163,7 @@ export function RefundModal({ saleId, saleTotal, items, onClose }: RefundModalPr
                       onChange={(e) =>
                         setQtys((prev) => ({
                           ...prev,
-                          [item.id]: Math.min(item.quantity, Math.max(1, parseInt(e.target.value) || 1)),
+                          [item.id]: Math.min(item.quantity, Math.max(0.0001, parseFloat(e.target.value) || 0.0001)),
                         }))
                       }
                       onClick={(e) => e.stopPropagation()}

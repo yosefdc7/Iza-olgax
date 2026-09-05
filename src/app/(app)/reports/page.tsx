@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { unstable_noStore as noStore } from "next/cache";
 import { getTranslations } from "next-intl/server";
 import { auth } from "@/lib/auth";
-import { ReportsDashboard } from "@/components/reports/reports-dashboard";
+import { ReportsWorkspace } from "@/components/reports/reports-workspace";
 
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Reports" };
@@ -13,7 +13,7 @@ export default async function ReportsPage() {
   noStore();
   const session = await auth.api.getSession({ headers: await headers() });
 
-  if (!session || session.user.role !== "ADMIN") {
+  if (!session) {
     redirect("/pos");
   }
 
@@ -22,7 +22,7 @@ export default async function ReportsPage() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <h1 className="text-2xl font-bold">{t("title")}</h1>
-      <ReportsDashboard />
+      <ReportsWorkspace isAdmin={session.user.role === "ADMIN"} />
     </div>
   );
 }

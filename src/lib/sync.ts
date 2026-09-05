@@ -10,6 +10,7 @@ export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
 let syncStatus: SyncStatus = "idle";
 const listeners = new Set<(status: SyncStatus) => void>();
+let replayInFlight: Promise<void> | null = null;
 
 function emit(s: SyncStatus) {
   syncStatus = s;
@@ -29,37 +30,48 @@ export function onSyncStatusChange(fn: (s: SyncStatus) => void): () => void {
  * Attempt to replay all pending offline writes.
  * Call this when the browser comes back online.
  */
-export async function replayOfflineQueue(): Promise<void> {
-  const pending = await getPendingQueue();
-  if (pending.length === 0) {
-    emit("synced");
-    return;
-  }
+export function replayOfflineQueue(): Promise<void> {
+  // The initial mount check and the browser's `online` event can arrive at
+  // the same time. Serialize replays so one queued sale cannot be submitted
+  // twice before the first run marks it as synced.
+  if (replayInFlight) return replayInFlight;
 
-  emit("syncing");
-  let hasError = false;
-
-  for (const item of pending) {
-    try {
-      const res = await fetch(item.endpoint, {
-        method: item.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(item.payload),
-      });
-
-      if (res.ok) {
-        await markSynced(item.id);
-      } else {
-        hasError = true;
-        console.warn(`[sync] Failed ${item.method} ${item.endpoint}: ${res.status}`);
-      }
-    } catch (err) {
-      hasError = true;
-      console.warn(`[sync] Network error replaying item ${item.id}:`, err);
+  replayInFlight = (async () => {
+    const pending = await getPendingQueue();
+    if (pending.length === 0) {
+      emit("synced");
+      return;
     }
-  }
 
-  emit(hasError ? "error" : "synced");
+    emit("syncing");
+    let hasError = false;
+
+    for (const item of pending) {
+      try {
+        const res = await fetch(item.endpoint, {
+          method: item.method,
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(item.payload),
+        });
+
+        if (res.ok) {
+          await markSynced(item.id);
+        } else {
+          hasError = true;
+          console.warn(`[sync] Failed ${item.method} ${item.endpoint}: ${res.status}`);
+        }
+      } catch (err) {
+        hasError = true;
+        console.warn(`[sync] Network error replaying item ${item.id}:`, err);
+      }
+    }
+
+    emit(hasError ? "error" : "synced");
+  })().finally(() => {
+    replayInFlight = null;
+  });
+
+  return replayInFlight;
 }
 
 /**
@@ -78,6 +90,8 @@ export async function seedProductCache(): Promise<void> {
       barcode?: string | null;
       price: number;
       stock: number;
+      unit: string;
+      quantityPrecision: number;
       category?: string | null;
     }[];
 

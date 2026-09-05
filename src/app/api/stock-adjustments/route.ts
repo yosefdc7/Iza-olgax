@@ -3,10 +3,14 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { z } from "zod";
+import { quantityFitsPrecision } from "@/lib/daily-ledger";
 
 const adjustSchema = z.object({
   productId: z.string(),
-  delta: z.number().int(),
+  delta: z
+    .number()
+    .finite()
+    .refine((value) => value !== 0, "Adjustment cannot be zero"),
   reason: z.enum(["RECEIVED", "DAMAGED", "THEFT", "CORRECTION", "OPENING_COUNT"]),
   note: z.string().optional(),
 });
@@ -23,17 +27,36 @@ export async function POST(req: NextRequest) {
 
   const { productId, delta, reason, note } = parsed.data;
 
-  const [adjustment] = await prisma.$transaction([
-    prisma.stockAdjustment.create({
-      data: { productId, userId: session.user.id, delta, reason, note },
-    }),
-    prisma.product.update({
-      where: { id: productId },
-      data: { stock: { increment: delta } },
-    }),
-  ]);
+  try {
+    const adjustment = await prisma.$transaction(async (tx) => {
+      const product = await tx.product.findUnique({
+        where: { id: productId },
+        select: { quantityPrecision: true },
+      });
+      if (!product) throw new Error("Product not found");
+      if (!quantityFitsPrecision(Math.abs(delta), product.quantityPrecision)) {
+        throw new Error(`Adjustment must use at most ${product.quantityPrecision} decimal places`);
+      }
 
-  return NextResponse.json({ adjustment });
+      const created = await tx.stockAdjustment.create({
+        data: { productId, userId: session.user.id, delta, reason, note },
+      });
+      await tx.product.update({
+        where: { id: productId },
+        data: { stock: { increment: delta } },
+      });
+      return created;
+    });
+
+    return NextResponse.json({ adjustment });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Stock adjustment failed";
+    if (message === "Product not found")
+      return NextResponse.json({ error: message }, { status: 404 });
+    if (message.includes("decimal places"))
+      return NextResponse.json({ error: message }, { status: 400 });
+    throw error;
+  }
 }
 
 export async function GET(req: NextRequest) {

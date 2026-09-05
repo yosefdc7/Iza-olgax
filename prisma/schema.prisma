@@ -7,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ============================================================
@@ -21,6 +21,7 @@ enum Role {
 
 enum SaleStatus {
   COMPLETED
+  PARTIALLY_REFUNDED
   VOIDED
   REFUNDED
 }
@@ -36,21 +37,21 @@ enum PaymentMethod {
 // ============================================================
 
 model User {
-  id            String    @id @default(cuid())
+  id            String   @id @default(cuid())
   name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
+  email         String   @unique
+  emailVerified Boolean  @default(false)
   image         String?
-  role          Role      @default(CASHIER)
+  role          Role     @default(CASHIER)
   pin           String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  sales             Sale[]
-  sessions          Session[]
-  accounts          Account[]
-  stockAdjustments  StockAdjustment[]
-  refunds           Refund[]
+  sales            Sale[]
+  sessions         Session[]
+  accounts         Account[]
+  stockAdjustments StockAdjustment[]
+  refunds          Refund[]
 }
 
 model Session {
@@ -106,10 +107,12 @@ model Product {
   barcode           String?  @unique
   price             Decimal
   cost              Decimal?
-  stock             Int      @default(0)
+  stock             Decimal  @default(0) @db.Decimal(14, 4)
+  unit              String   @default("pc")
+  quantityPrecision Int      @default(0)
   category          String?
   imageUrl          String?
-  lowStockThreshold Int      @default(5)
+  lowStockThreshold Decimal  @default(5) @db.Decimal(14, 4)
   active            Boolean  @default(true)
   supplierId        String?
   createdAt         DateTime @default(now())
@@ -117,7 +120,7 @@ model Product {
 
   saleItems        SaleItem[]
   stockAdjustments StockAdjustment[]
-  supplier         Supplier? @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
 }
 
 // ============================================================
@@ -125,17 +128,17 @@ model Product {
 // ============================================================
 
 model Customer {
-  id        String   @id @default(cuid())
-  name      String
-  phone     String?  @unique
-  email     String?  @unique
-  notes     String?
+  id            String   @id @default(cuid())
+  name          String
+  phone         String?  @unique
+  email         String?  @unique
+  notes         String?
   loyaltyPoints Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  sales         Sale[]
-  loyaltyLogs   LoyaltyLog[]
+  sales       Sale[]
+  loyaltyLogs LoyaltyLog[]
 }
 
 // ============================================================
@@ -143,38 +146,58 @@ model Customer {
 // ============================================================
 
 model Sale {
-  id             String        @id @default(cuid())
-  userId         String
-  customerId     String?
-  subtotal       Decimal
-  taxRate        Decimal       @default(0)
-  taxAmount      Decimal
-  discountAmount Decimal       @default(0)
-  tipAmount      Decimal?
-  total          Decimal
-  paymentMethod  PaymentMethod @default(CASH)
-  paymentLines   Json?
-  amountTendered Decimal?
-  changeDue      Decimal?
-  status         SaleStatus    @default(COMPLETED)
-  voidReason     String?
-  notes          String?
-  createdAt      DateTime      @default(now())
+  id              String        @id @default(cuid())
+  userId          String
+  customerId      String?
+  subtotal        Decimal
+  taxRate         Decimal       @default(0)
+  taxAmount       Decimal
+  discountAmount  Decimal       @default(0)
+  tipAmount       Decimal?
+  total           Decimal
+  paymentMethod   PaymentMethod @default(CASH)
+  paymentLines    Json?
+  amountTendered  Decimal?
+  changeDue       Decimal?
+  status          SaleStatus    @default(COMPLETED)
+  receiptSeriesId String?
+  receiptNumber   Int?
+  legacyReference String?
+  backfilled      Boolean       @default(false)
+  voidReason      String?
+  notes           String?
+  createdAt       DateTime      @default(now())
 
-  user     User      @relation(fields: [userId], references: [id])
-  customer Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  items    SaleItem[]
-  refunds  Refund[]
-  loyaltyLogs LoyaltyLog[]
+  user          User           @relation(fields: [userId], references: [id])
+  receiptSeries ReceiptSeries? @relation(fields: [receiptSeriesId], references: [id])
+  customer      Customer?      @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  items         SaleItem[]
+  refunds       Refund[]
+  loyaltyLogs   LoyaltyLog[]
+
+  @@unique([receiptSeriesId, receiptNumber])
+}
+
+model ReceiptSeries {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  nextNumber Int      @default(1)
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  sales Sale[]
 }
 
 model SaleItem {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   saleId    String
   productId String?
   name      String
   price     Decimal
-  quantity  Int
+  quantity  Decimal  @db.Decimal(14, 4)
+  unit      String   @default("pc")
+  unitCost  Decimal? @db.Decimal(14, 4)
   total     Decimal
   notes     String?
 
@@ -204,13 +227,13 @@ enum LoyaltyLogType {
 }
 
 model LoyaltyLog {
-  id         String          @id @default(cuid())
+  id         String         @id @default(cuid())
   customerId String
   saleId     String?
   delta      Int
   type       LoyaltyLogType
   note       String?
-  createdAt  DateTime        @default(now())
+  createdAt  DateTime       @default(now())
 
   customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
   sale     Sale?    @relation(fields: [saleId], references: [id], onDelete: SetNull)
@@ -232,7 +255,7 @@ model StockAdjustment {
   id        String         @id @default(cuid())
   productId String
   userId    String
-  delta     Int
+  delta     Decimal        @db.Decimal(14, 4)
   reason    StockAdjReason
   note      String?
   createdAt DateTime       @default(now())
@@ -259,14 +282,14 @@ model Supplier {
 // ============================================================
 
 model Refund {
-  id         String   @id @default(cuid())
-  saleId     String
-  userId     String
-  amount     Decimal
-  reason     String?
-  items      Json
-  restoreStock Boolean @default(true)
-  createdAt  DateTime @default(now())
+  id           String   @id @default(cuid())
+  saleId       String
+  userId       String
+  amount       Decimal
+  reason       String?
+  items        Json
+  restoreStock Boolean  @default(true)
+  createdAt    DateTime @default(now())
 
   sale Sale @relation(fields: [saleId], references: [id])
   user User @relation(fields: [userId], references: [id])
@@ -277,33 +300,34 @@ model Refund {
 // ============================================================
 
 model BusinessSettings {
-  id               String   @id @default("singleton")
-  name             String   @default("My Store")
-  logoUrl          String?
-  primaryColor     String   @default("#0f2044")
-  accentColor      String   @default("#f5c518")
-  currency         String   @default("$")
-  currencyDecimals Int      @default(2)
-  taxRate          Decimal  @default(0)
-  taxName          String   @default("Tax")
-  receiptFooter    String   @default("Thank you for your purchase!")
-  language         String   @default("en")
+  id                 String   @id @default("singleton")
+  name               String   @default("My Store")
+  logoUrl            String?
+  primaryColor       String   @default("#0f2044")
+  accentColor        String   @default("#f5c518")
+  currency           String   @default("$")
+  currencyDecimals   Int      @default(2)
+  taxRate            Decimal  @default(0)
+  taxName            String   @default("Tax")
+  receiptFooter      String   @default("Thank you for your purchase!")
+  language           String   @default("en")
+  businessTimezone   String   @default("Asia/Manila")
   // Loyalty
-  loyaltyEnabled   Boolean  @default(false)
-  loyaltyEarnRate  Decimal  @default(1)  // points per $1 spent
-  loyaltyRedeemValue Decimal @default(100) // points per $1 discount
+  loyaltyEnabled     Boolean  @default(false)
+  loyaltyEarnRate    Decimal  @default(1) // points per $1 spent
+  loyaltyRedeemValue Decimal  @default(100) // points per $1 discount
   // Low-stock
-  lowStockThreshold Int     @default(5)
+  lowStockThreshold  Int      @default(5)
   // Image storage
-  storageProvider  String   @default("local")  // local | vercel_blob | cloudflare_r2 | s3
-  storageRegion    String?
-  storageBucket    String?
-  storageEndpoint  String?
-  storageAccessKey String?
-  storageSecretKey String?
-  storagePublicUrl String?
-  posAutoLockMinutes Int     @default(0)
-  setupComplete    Boolean  @default(false)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  storageProvider    String   @default("local") // local | supabase
+  storageRegion      String?
+  storageBucket      String?
+  storageEndpoint    String?
+  storageAccessKey   String?
+  storageSecretKey   String?
+  storagePublicUrl   String?
+  posAutoLockMinutes Int      @default(0)
+  setupComplete      Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }

@@ -71,7 +71,7 @@ const mainNavGroups: NavGroupDef[] = [
     id: "group-analytics",
     items: [
       { href: "/sales", key: "sales", icon: ReceiptText, roles: ["ADMIN", "CASHIER"] },
-      { href: "/reports", key: "reports", icon: BarChart3, roles: ["ADMIN"] },
+      { href: "/reports", key: "reports", icon: BarChart3, roles: ["ADMIN", "CASHIER"] },
     ],
   },
 ];

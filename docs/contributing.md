@@ -37,7 +37,7 @@ cd izah-pos
 pnpm install
 cp .env.example .env     # fill in DATABASE_URL and BETTER_AUTH_SECRET
 pnpm db:migrate
-pnpm db:seed             # optional sample data
+pnpm db:seed:catalog     # optional credential-free sample data
 pnpm dev
 ```
 

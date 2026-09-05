@@ -12,6 +12,8 @@ export interface CartItem {
   notes: string;
   /** Snapshot of stock at time of add (for offline validation) */
   stock: number;
+  unit: string;
+  quantityPrecision: number;
 }
 
 /** One line in a split-tender payment */

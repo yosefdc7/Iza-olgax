@@ -13,8 +13,8 @@ interface Product {
   name: string;
   sku: string | null;
   price: { toString(): string };
-  stock: number;
-  lowStockThreshold: number;
+  stock: { toString(): string };
+  lowStockThreshold: { toString(): string };
   category: string | null;
   active: boolean;
 }
@@ -66,8 +66,10 @@ export function ProductTable({ products }: ProductTableProps) {
             </thead>
             <tbody className="divide-y divide-border/60">
               {products.map((product) => {
-                const isLowStock = product.stock <= product.lowStockThreshold;
-                const isOutOfStock = product.stock === 0;
+                const stock = Number(product.stock);
+                const threshold = Number(product.lowStockThreshold);
+                const isLowStock = stock <= threshold;
+                const isOutOfStock = stock === 0;
 
                 return (
                   <tr key={product.id} className="hover:bg-muted/30 transition-colors">
@@ -109,11 +111,11 @@ export function ProductTable({ products }: ProductTableProps) {
                       ) : isLowStock ? (
                         <span className="inline-flex items-center gap-1 font-mono text-xs font-bold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-full border border-amber-500/30">
                           <AlertTriangle className="h-3 w-3" />
-                          {product.stock} {t("low_stock_badge")}
+                          {stock} {t("low_stock_badge")}
                         </span>
                       ) : (
                         <span className="font-mono text-xs font-medium text-foreground">
-                          {product.stock}
+                          {stock}
                         </span>
                       )}
                     </td>
@@ -156,7 +158,7 @@ export function ProductTable({ products }: ProductTableProps) {
         <StockAdjustModal
           productId={adjusting.id}
           productName={adjusting.name}
-          currentStock={adjusting.stock}
+          currentStock={Number(adjusting.stock)}
           onClose={() => setAdjusting(null)}
         />
       )}

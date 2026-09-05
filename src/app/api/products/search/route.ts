@@ -8,6 +8,8 @@ const PRODUCT_SELECT = {
   name: true,
   price: true,
   stock: true,
+  unit: true,
+  quantityPrecision: true,
   sku: true,
   barcode: true,
   category: true,
@@ -35,7 +37,7 @@ export async function GET(req: NextRequest) {
       take,
     });
     return NextResponse.json(
-      products.map((p: typeof products[number]) => ({ ...p, price: parseFloat(p.price.toString()) }))
+      products.map((p: typeof products[number]) => ({ ...p, price: parseFloat(p.price.toString()), stock: parseFloat(p.stock.toString()) }))
     );
   }
 
@@ -54,6 +56,6 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.json(
-    products.map((p: typeof products[number]) => ({ ...p, price: parseFloat(p.price.toString()) }))
+    products.map((p: typeof products[number]) => ({ ...p, price: parseFloat(p.price.toString()), stock: parseFloat(p.stock.toString()) }))
   );
 }

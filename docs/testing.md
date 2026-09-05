@@ -2,10 +2,10 @@
 
 Izah POS has two independent test layers:
 
-| Layer | Tool | Scope | Location |
-|---|---|---|---|
-| **Unit / Integration** | [Vitest](https://vitest.dev/) | Pure business logic (calculations, sync queue) | `src/tests/*.test.ts` |
-| **End-to-End (E2E)** | [Playwright](https://playwright.dev/) | Full browser flows against a real running server | `src/tests/e2e/*.spec.ts` |
+| Layer                  | Tool                                  | Scope                                            | Location                  |
+| ---------------------- | ------------------------------------- | ------------------------------------------------ | ------------------------- |
+| **Unit / Integration** | [Vitest](https://vitest.dev/)         | Pure business logic (calculations, sync queue)   | `src/tests/*.test.ts`     |
+| **End-to-End (E2E)**   | [Playwright](https://playwright.dev/) | Full browser flows against a real running server | `src/tests/e2e/*.spec.ts` |
 
 ---
 
@@ -102,7 +102,7 @@ pnpm exec playwright show-report
 pnpm exec playwright codegen http://localhost:3000
 ```
 
-> **Note:** E2E tests require a seeded database with `admin@example.com` / `admin123456` and `cashier@example.com` / `cashier123456`. Run `pnpm db:seed` first.
+> **Note:** E2E tests use a disposable local fixture with test-only accounts. Do not run the legacy credential seed against Supabase production; provision production users through the setup wizard and Settings.
 
 ---
 
@@ -110,27 +110,27 @@ pnpm exec playwright codegen http://localhost:3000
 
 ### Vitest (`vitest.config.ts`)
 
-| Setting | Value | Notes |
-|---|---|---|
-| `environment` | `jsdom` | Browser-like globals (window, document) |
-| `setupFiles` | `src/tests/setup.ts` | Loads `@testing-library/jest-dom` matchers |
-| `include` | `**/*.test.ts`, `**/*.test.tsx` | Only files ending in `.test.*` |
-| `exclude` | `**/e2e/**`, `**/*.spec.ts` | Playwright specs are excluded from Vitest |
-| `resolve.alias` `@` | `./src` | Matches Next.js path alias |
+| Setting             | Value                           | Notes                                      |
+| ------------------- | ------------------------------- | ------------------------------------------ |
+| `environment`       | `jsdom`                         | Browser-like globals (window, document)    |
+| `setupFiles`        | `src/tests/setup.ts`            | Loads `@testing-library/jest-dom` matchers |
+| `include`           | `**/*.test.ts`, `**/*.test.tsx` | Only files ending in `.test.*`             |
+| `exclude`           | `**/e2e/**`, `**/*.spec.ts`     | Playwright specs are excluded from Vitest  |
+| `resolve.alias` `@` | `./src`                         | Matches Next.js path alias                 |
 
 ### Playwright (`playwright.config.ts`)
 
-| Setting | Value | Notes |
-|---|---|---|
-| `testDir` | `./src/tests/e2e` | All `*.spec.ts` files |
-| `fullyParallel` | `false` | Sequential — avoids DB conflicts between tests |
-| `workers` | `1` | Single-worker to preserve test order |
-| `retries` | `2` (CI) / `0` (local) | Flaky test protection in CI |
-| `browser` | Chromium (Desktop) | Only Chromium for now |
-| `trace` | `on-first-retry` | Trace file saved on first retry |
-| `screenshot` | `only-on-failure` | Screenshot saved on assertion failure |
-| `video` | `retain-on-failure` | Video saved on test failure |
-| `webServer` | `pnpm dev` on port `3000` | Auto-starts — reuses existing server locally |
+| Setting         | Value                     | Notes                                          |
+| --------------- | ------------------------- | ---------------------------------------------- |
+| `testDir`       | `./src/tests/e2e`         | All `*.spec.ts` files                          |
+| `fullyParallel` | `false`                   | Sequential — avoids DB conflicts between tests |
+| `workers`       | `1`                       | Single-worker to preserve test order           |
+| `retries`       | `2` (CI) / `0` (local)    | Flaky test protection in CI                    |
+| `browser`       | Chromium (Desktop)        | Only Chromium for now                          |
+| `trace`         | `on-first-retry`          | Trace file saved on first retry                |
+| `screenshot`    | `only-on-failure`         | Screenshot saved on assertion failure          |
+| `video`         | `retain-on-failure`       | Video saved on test failure                    |
+| `webServer`     | `pnpm dev` on port `3000` | Auto-starts — reuses existing server locally   |
 
 ---
 
@@ -140,14 +140,14 @@ pnpm exec playwright codegen http://localhost:3000
 
 Tests the pure arithmetic functions used by the POS cart store.
 
-| # | Test | Input | Expected |
-|---|---|---|---|
-| 1 | Calculates subtotal correctly | `[{price:10, qty:2}, {price:5.5, qty:1}]` | `25.5` |
-| 2 | Applies fixed discount | Subtotal `25.5`, discount `$5` fixed | `5.00` deducted |
-| 3 | Applies percent discount | Subtotal `25.5`, discount `10%` | `≈ 2.55` deducted |
-| 4 | Caps fixed discount at subtotal | Discount `$100` on subtotal `$25.5` | Capped at `$25.5` |
-| 5 | Calculates tax on discounted subtotal | Sub `25.5`, disc `$5`, rate `10%` | Tax `≈ $2.05` |
-| 6 | Calculates total correctly | Sub `25.5`, disc `$5`, tax `$2.05` | Total `≈ $22.55` |
+| #   | Test                                  | Input                                     | Expected          |
+| --- | ------------------------------------- | ----------------------------------------- | ----------------- |
+| 1   | Calculates subtotal correctly         | `[{price:10, qty:2}, {price:5.5, qty:1}]` | `25.5`            |
+| 2   | Applies fixed discount                | Subtotal `25.5`, discount `$5` fixed      | `5.00` deducted   |
+| 3   | Applies percent discount              | Subtotal `25.5`, discount `10%`           | `≈ 2.55` deducted |
+| 4   | Caps fixed discount at subtotal       | Discount `$100` on subtotal `$25.5`       | Capped at `$25.5` |
+| 5   | Calculates tax on discounted subtotal | Sub `25.5`, disc `$5`, rate `10%`         | Tax `≈ $2.05`     |
+| 6   | Calculates total correctly            | Sub `25.5`, disc `$5`, tax `$2.05`        | Total `≈ $22.55`  |
 
 **File:** `src/tests/cart.test.ts`
 
@@ -159,37 +159,37 @@ Tests the guard-rail functions that prevent over-refunding.
 
 #### `itemRefundMax` — maximum refundable per line item
 
-| Test | Input | Expected |
-|---|---|---|
-| Standard item (price × qty) | price `$10`, qty `2` | `$20.00` |
-| Single-unit item | price `$5.99`, qty `1` | `$5.99` |
-| Decimal quantity (kg) | price `$4.00`, qty `0.5 kg` | `$2.00` |
+| Test                        | Input                       | Expected |
+| --------------------------- | --------------------------- | -------- |
+| Standard item (price × qty) | price `$10`, qty `2`        | `$20.00` |
+| Single-unit item            | price `$5.99`, qty `1`      | `$5.99`  |
+| Decimal quantity (kg)       | price `$4.00`, qty `0.5 kg` | `$2.00`  |
 
 #### `clampRefund` — bounds enforcement
 
-| Test | Input | Expected |
-|---|---|---|
-| Within bounds | amount `$10`, saleTotal `$50` | `$10` |
-| Exceeds sale total (full refund capped) | amount `$100`, saleTotal `$50` | `$50` |
-| Negative amount | amount `−$5`, saleTotal `$50` | `$0` |
+| Test                                    | Input                          | Expected |
+| --------------------------------------- | ------------------------------ | -------- |
+| Within bounds                           | amount `$10`, saleTotal `$50`  | `$10`    |
+| Exceeds sale total (full refund capped) | amount `$100`, saleTotal `$50` | `$50`    |
+| Negative amount                         | amount `−$5`, saleTotal `$50`  | `$0`     |
 
 #### `partial refund flow` — multi-refund validation (saleTotal `$75.00`)
 
-| Test | Existing refunds | Requested | Valid? |
-|---|---|---|---|
-| First partial refund | none | `$25` | ✅ |
-| Full refund | none | `$75` | ✅ |
-| Exceeds total | none | `$80` | ❌ |
-| Second partial (within limit) | `[$25]` | `$40` | ✅ |
-| Second partial (would exceed) | `[$50]` | `$30` | ❌ |
-| Exact remaining balance | `[$25, $25]` | `$25` | ✅ |
+| Test                          | Existing refunds | Requested | Valid? |
+| ----------------------------- | ---------------- | --------- | ------ |
+| First partial refund          | none             | `$25`     | ✅     |
+| Full refund                   | none             | `$75`     | ✅     |
+| Exceeds total                 | none             | `$80`     | ❌     |
+| Second partial (within limit) | `[$25]`          | `$40`     | ✅     |
+| Second partial (would exceed) | `[$50]`          | `$30`     | ❌     |
+| Exact remaining balance       | `[$25, $25]`     | `$25`     | ✅     |
 
 #### `totalRefunded` — cumulative sum
 
-| Test | Input | Expected |
-|---|---|---|
-| Sums existing + requested | existing `[$10, $15]`, requested `$5` | `$30` |
-| No prior refunds | existing `[]`, requested `$20` | `$20` |
+| Test                      | Input                                 | Expected |
+| ------------------------- | ------------------------------------- | -------- |
+| Sums existing + requested | existing `[$10, $15]`, requested `$5` | `$30`    |
+| No prior refunds          | existing `[]`, requested `$20`        | `$20`    |
 
 **File:** `src/tests/refund.test.ts`
 
@@ -201,38 +201,38 @@ Tests all loyalty maths: earning, redeeming, balance tracking, and full round-tr
 
 #### `earnPoints` — points awarded per purchase
 
-| Test | Sale total | Earn rate | Expected points |
-|---|---|---|---|
-| 1 pt per dollar | `$50` | `1` | `50` |
-| Fractional total (floor) | `$15.99` | `1` | `15` (floor) |
-| Half-point rate | `$100` | `0.5` | `50` |
-| Zero-total order | `$0` | `1` | `0` |
-| Loyalty disabled (rate = 0) | `$100` | `0` | `0` |
+| Test                        | Sale total | Earn rate | Expected points |
+| --------------------------- | ---------- | --------- | --------------- |
+| 1 pt per dollar             | `$50`      | `1`       | `50`            |
+| Fractional total (floor)    | `$15.99`   | `1`       | `15` (floor)    |
+| Half-point rate             | `$100`     | `0.5`     | `50`            |
+| Zero-total order            | `$0`       | `1`       | `0`             |
+| Loyalty disabled (rate = 0) | `$100`     | `0`       | `0`             |
 
 #### `redeemPoints` — converting points to discount value
 
-| Test | Points | Redeem rate | Max% | Order total | Expected value |
-|---|---|---|---|---|---|
-| Standard conversion | `100` pts | `$0.01/pt` | `100%` | `$50` | `$1.00` |
-| Capped at 50% of order | `10 000` pts | `$0.01/pt` | `50%` | `$50` | `$25.00` |
-| 100% redemption allowed | `1 000` pts | `$0.01/pt` | `100%` | `$5` | `$5.00` |
-| Zero points | `0` pts | `$0.01/pt` | `50%` | `$100` | `$0.00` |
+| Test                    | Points       | Redeem rate | Max%   | Order total | Expected value |
+| ----------------------- | ------------ | ----------- | ------ | ----------- | -------------- |
+| Standard conversion     | `100` pts    | `$0.01/pt`  | `100%` | `$50`       | `$1.00`        |
+| Capped at 50% of order  | `10 000` pts | `$0.01/pt`  | `50%`  | `$50`       | `$25.00`       |
+| 100% redemption allowed | `1 000` pts  | `$0.01/pt`  | `100%` | `$5`        | `$5.00`        |
+| Zero points             | `0` pts      | `$0.01/pt`  | `50%`  | `$100`      | `$0.00`        |
 
 #### `updateBalance` — net balance after a transaction
 
-| Test | Current | Earned | Redeemed | New balance |
-|---|---|---|---|---|
-| Earn only | `100` | `+15` | `0` | `115` |
-| Redeem only | `200` | `0` | `−50` | `150` |
-| Earn and redeem same transaction | `100` | `+20` | `−30` | `90` |
-| Never below zero | `10` | `0` | `−50` | `0` |
+| Test                             | Current | Earned | Redeemed | New balance |
+| -------------------------------- | ------- | ------ | -------- | ----------- |
+| Earn only                        | `100`   | `+15`  | `0`      | `115`       |
+| Redeem only                      | `200`   | `0`    | `−50`    | `150`       |
+| Earn and redeem same transaction | `100`   | `+20`  | `−30`    | `90`        |
+| Never below zero                 | `10`    | `0`    | `−50`    | `0`         |
 
 #### `monetaryToPoints` — inverse conversion
 
-| Test | Value | Redeem rate | Expected points consumed |
-|---|---|---|---|
-| Even conversion | `$1.00` | `$0.01/pt` | `100` pts |
-| Fractional (ceiling) | `$0.015` | `$0.01/pt` | `2` pts (ceiling) |
+| Test                 | Value    | Redeem rate | Expected points consumed |
+| -------------------- | -------- | ----------- | ------------------------ |
+| Even conversion      | `$1.00`  | `$0.01/pt`  | `100` pts                |
+| Fractional (ceiling) | `$0.015` | `$0.01/pt`  | `2` pts (ceiling)        |
 
 #### Full loyalty round-trip flow
 
@@ -251,39 +251,39 @@ Tests the `replayOfflineQueue` function from `src/lib/sync.ts`. PGLite is mocked
 
 #### `getSyncStatus`
 
-| Test | Expected |
-|---|---|
+| Test                          | Expected                                            |
+| ----------------------------- | --------------------------------------------------- |
 | Returns a valid status string | One of `"idle" \| "syncing" \| "synced" \| "error"` |
 
 #### `onSyncStatusChange` — subscription management
 
-| Test | Scenario | Expected |
-|---|---|---|
-| Callback fires during replay | Empty queue replay | Callback receives `"synced"` |
-| Unsubscribe stops notifications | Unsub before replay | Callback never called |
+| Test                            | Scenario            | Expected                     |
+| ------------------------------- | ------------------- | ---------------------------- |
+| Callback fires during replay    | Empty queue replay  | Callback receives `"synced"` |
+| Unsubscribe stops notifications | Unsub before replay | Callback never called        |
 
 #### Empty queue
 
-| Test | Expected |
-|---|---|
+| Test                         | Expected         |
+| ---------------------------- | ---------------- | ---------------------------- |
 | Emits `"synced"` immediately | No items pending | Status sequence `["synced"]` |
-| Does not call `markSynced` | No items | `markSynced` never called |
+| Does not call `markSynced`   | No items         | `markSynced` never called    |
 
 #### Successful items (2 pending items, fetch returns `ok: true`)
 
-| Test | Expected |
-|---|---|
-| Emits `"syncing"` then `"synced"` | Both items succeed | Status sequence `["syncing", "synced"]` |
-| Calls `fetch` for each item | 2 items | `fetch` called twice with correct endpoint + method |
-| Calls `markSynced` for each item | 2 items | `markSynced(1)` and `markSynced(2)` |
+| Test                              | Expected           |
+| --------------------------------- | ------------------ | --------------------------------------------------- |
+| Emits `"syncing"` then `"synced"` | Both items succeed | Status sequence `["syncing", "synced"]`             |
+| Calls `fetch` for each item       | 2 items            | `fetch` called twice with correct endpoint + method |
+| Calls `markSynced` for each item  | 2 items            | `markSynced(1)` and `markSynced(2)`                 |
 
 #### Fetch failure
 
-| Test | Scenario | Expected |
-|---|---|---|
-| Emits `"error"` on partial failure | Item 1 ok, item 2 returns 500 | Status sequence `["syncing", "error"]` |
-| Emits `"error"` on network error | Fetch throws | Status sequence `["syncing", "error"]` |
-| Still marks succeeded items synced | Item 1 ok, item 2 fails | `markSynced(10)` called; item `11` not marked |
+| Test                               | Scenario                      | Expected                                      |
+| ---------------------------------- | ----------------------------- | --------------------------------------------- |
+| Emits `"error"` on partial failure | Item 1 ok, item 2 returns 500 | Status sequence `["syncing", "error"]`        |
+| Emits `"error"` on network error   | Fetch throws                  | Status sequence `["syncing", "error"]`        |
+| Still marks succeeded items synced | Item 1 ok, item 2 fails       | `markSynced(10)` called; item `11` not marked |
 
 **File:** `src/tests/sync.test.ts`
 
@@ -292,76 +292,76 @@ Tests the `replayOfflineQueue` function from `src/lib/sync.ts`. PGLite is mocked
 ## E2E Test Scenarios
 
 All E2E tests run in Chromium against `http://localhost:3000`.  
-Seed credentials required: `admin@example.com` / `admin123456`, `cashier@example.com` / `cashier123456`.
+Seed credentials are required only for the disposable local E2E fixture; production credentials must be user-created through the setup wizard.
 
 ---
 
 ### Authentication (`auth.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Unauthenticated redirect | Navigate to `/pos` without login | Redirected to `/login` |
-| Wrong password | Submit wrong password for admin | Stay on `/login`; error message visible |
-| Admin login | Login as admin | Redirected to `/pos`; can navigate to `/settings` |
-| Cashier role restriction | Login as cashier, navigate to `/settings` | Redirected back to `/pos` |
+| Test                     | Steps                                     | Expected                                          |
+| ------------------------ | ----------------------------------------- | ------------------------------------------------- |
+| Unauthenticated redirect | Navigate to `/pos` without login          | Redirected to `/login`                            |
+| Wrong password           | Submit wrong password for admin           | Stay on `/login`; error message visible           |
+| Admin login              | Login as admin                            | Redirected to `/pos`; can navigate to `/settings` |
+| Cashier role restriction | Login as cashier, navigate to `/settings` | Redirected back to `/pos`                         |
 
 ---
 
 ### Products (`products.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Create a product | Fill form (name, price, stock), submit | Redirected to `/products`; product visible in list |
-| Product appears in POS search | Login, search for the new product in POS | Product name visible in dropdown |
-| Low-stock indicator | Create product with stock `1` and threshold `5` | Low-stock badge visible on product row |
+| Test                          | Steps                                           | Expected                                           |
+| ----------------------------- | ----------------------------------------------- | -------------------------------------------------- |
+| Create a product              | Fill form (name, price, stock), submit          | Redirected to `/products`; product visible in list |
+| Product appears in POS search | Login, search for the new product in POS        | Product name visible in dropdown                   |
+| Low-stock indicator           | Create product with stock `1` and threshold `5` | Low-stock badge visible on product row             |
 
 ---
 
 ### POS Sales (`sales.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Add product to cart via search | Search product name, click first result | Cart count shows `Cart (1)` |
-| Complete a CASH sale | Add product → select CASH → click Charge | Receipt modal appears; cart clears; a row appears in `/sales` |
-| Hold and recall order | Add product → Hold Order → Recall → click Recall in modal | Cart refills with the held item |
+| Test                           | Steps                                                     | Expected                                                      |
+| ------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------- |
+| Add product to cart via search | Search product name, click first result                   | Cart count shows `Cart (1)`                                   |
+| Complete a CASH sale           | Add product → select CASH → click Charge                  | Receipt modal appears; cart clears; a row appears in `/sales` |
+| Hold and recall order          | Add product → Hold Order → Recall → click Recall in modal | Cart refills with the held item                               |
 
 ---
 
 ### Receipt Printing (`receipt.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Print button visible after sale | Complete sale | Receipt modal shows, Print button visible, `#receipt-print` contains "TOTAL" |
-| Close without printing | Complete sale; click close (X) | Modal dismissed; cart shows "Cart is empty" |
+| Test                            | Steps                          | Expected                                                                     |
+| ------------------------------- | ------------------------------ | ---------------------------------------------------------------------------- |
+| Print button visible after sale | Complete sale                  | Receipt modal shows, Print button visible, `#receipt-print` contains "TOTAL" |
+| Close without printing          | Complete sale; click close (X) | Modal dismissed; cart shows "Cart is empty"                                  |
 
 ---
 
 ### Split Payment (`split-payment.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Split tender (cash + card) | Add product; enter cash portion; verify Charge visible; total shown | Charge button visible; totals rendered in payment panel |
-| Change due on over-tendered cash | Add product; select CASH; enter `$100` | "Change" label visible in payment panel |
+| Test                             | Steps                                                               | Expected                                                |
+| -------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------- |
+| Split tender (cash + card)       | Add product; enter cash portion; verify Charge visible; total shown | Charge button visible; totals rendered in payment panel |
+| Change due on over-tendered cash | Add product; select CASH; enter `$100`                              | "Change" label visible in payment panel                 |
 
 ---
 
 ### Offline Mode (`offline.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Offline indicator appears | Go to `/pos`; call `context.setOffline(true)` | "Offline" indicator visible within 5 s |
-| Cart usable while offline | Go offline; search and add a product from the quick-grid | Item added to cart |
-| Synced status after reconnect | Go offline briefly; call `setOffline(false)` | "Synced" / "Online" indicator visible within 10 s |
+| Test                          | Steps                                                    | Expected                                          |
+| ----------------------------- | -------------------------------------------------------- | ------------------------------------------------- |
+| Offline indicator appears     | Go to `/pos`; call `context.setOffline(true)`            | "Offline" indicator visible within 5 s            |
+| Cart usable while offline     | Go offline; search and add a product from the quick-grid | Item added to cart                                |
+| Synced status after reconnect | Go offline briefly; call `setOffline(false)`             | "Synced" / "Online" indicator visible within 10 s |
 
 ---
 
 ### Customer & Loyalty (`customer-loyalty.spec.ts`)
 
-| Test | Steps | Expected |
-|---|---|---|
-| Attach customer to sale | Type in CustomerCapture field; select from dropdown | Customer name remains in capture field |
-| Loyalty points label on receipt | Add product, attach customer, complete CASH sale | Receipt modal renders (content includes total) |
-| Loyalty balance on customer profile | Open `/customers`; click first customer row | Profile page shows "Points" / "Loyalty" / "Balance" label |
+| Test                                | Steps                                               | Expected                                                  |
+| ----------------------------------- | --------------------------------------------------- | --------------------------------------------------------- |
+| Attach customer to sale             | Type in CustomerCapture field; select from dropdown | Customer name remains in capture field                    |
+| Loyalty points label on receipt     | Add product, attach customer, complete CASH sale    | Receipt modal renders (content includes total)            |
+| Loyalty balance on customer profile | Open `/customers`; click first customer row         | Profile page shows "Points" / "Loyalty" / "Balance" label |
 
 ---
 
@@ -370,8 +370,8 @@ Seed credentials required: `admin@example.com` / `admin123456`, `cashier@example
 **`src/tests/e2e/helpers.ts`** exports two shared login utilities:
 
 ```typescript
-loginAsAdmin(page)   // logs in as admin@example.com / admin123456
-loginAsCashier(page) // logs in as cashier@example.com / cashier123456
+loginAsAdmin(page); // logs in as the isolated test admin
+loginAsCashier(page); // logs in as the isolated test cashier
 ```
 
 Both functions navigate to `/login`, fill the form, submit, and wait for a redirect to `/pos` (10 s timeout). Use them in `test.beforeEach` to avoid repeating login steps.
@@ -380,20 +380,20 @@ Both functions navigate to `/login`, fill the form, submit, and wait for a redir
 
 ## Environment Setup for E2E
 
-### 1. Seed the database
+### 1. Prepare a disposable test database
 
-E2E tests expect pre-seeded admin and cashier users, plus at least a few products (e.g. "Coffee"):
+E2E tests expect test-only admin and cashier users, plus at least a few products (e.g. "Coffee"). Use an isolated local test database and fixture setup; never use these credentials in production:
 
 ```bash
-pnpm db:seed
+pnpm db:seed:catalog
 ```
 
 ### 2. Required seed data
 
-| Entity | Value |
-|---|---|
-| Admin user | email: `admin@example.com`, password: `admin123456`, role: `ADMIN` |
-| Cashier user | email: `cashier@example.com`, password: `cashier123456`, role: `CASHIER` |
+| Entity          | Value                                                        |
+| --------------- | ------------------------------------------------------------ |
+| Admin user      | Test-only fixture account, role: `ADMIN`                     |
+| Cashier user    | Test-only fixture account, role: `CASHIER`                   |
 | Sample products | At least one product named "Coffee" (used in most POS tests) |
 
 ### 3. Environment variables
@@ -410,13 +410,13 @@ pnpm exec playwright install chromium
 
 ## CI Behaviour
 
-| Setting | CI value | Reason |
-|---|---|---|
-| `retries` | `2` | Flaky-test protection |
-| `workers` | `1` | Prevent parallel DB writes |
-| `reporter` | `github` | Annotates PRs with failing test names |
-| `forbidOnly` | `true` | Fails if `test.only` is left in code |
-| `reuseExistingServer` | `false` | Always starts a fresh server in CI |
+| Setting               | CI value | Reason                                |
+| --------------------- | -------- | ------------------------------------- |
+| `retries`             | `2`      | Flaky-test protection                 |
+| `workers`             | `1`      | Prevent parallel DB writes            |
+| `reporter`            | `github` | Annotates PRs with failing test names |
+| `forbidOnly`          | `true`   | Fails if `test.only` is left in code  |
+| `reuseExistingServer` | `false`  | Always starts a fresh server in CI    |
 
 Artifacts saved on failure: trace file (`.zip`), screenshot (`.png`), video (`.webm`). Find them in the `playwright-report/` directory.
 
@@ -440,8 +440,8 @@ Artifacts saved on failure: trace file (`.zip`), screenshot (`.png`), video (`.w
 
 ### Naming conventions
 
-| Type | File pattern | Example |
-|---|---|---|
-| Unit | `*.test.ts` | `discount.test.ts` |
-| E2E | `*.spec.ts` | `discount.spec.ts` |
+| Type           | File pattern | Example                    |
+| -------------- | ------------ | -------------------------- |
+| Unit           | `*.test.ts`  | `discount.test.ts`         |
+| E2E            | `*.spec.ts`  | `discount.spec.ts`         |
 | Shared helpers | `helpers.ts` | `src/tests/e2e/helpers.ts` |

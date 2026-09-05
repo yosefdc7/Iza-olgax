@@ -18,10 +18,12 @@
 ## Prerequisites
 
 ### For Docker
+
 - [Docker](https://docs.docker.com/get-docker/) ≥ 24
 - [Docker Compose](https://docs.docker.com/compose/) v2+
 
 ### For Local Development
+
 - **Node.js** ≥ 20 ([download](https://nodejs.org))
 - **pnpm** ≥ 9 — `npm install -g pnpm`
 - **PostgreSQL** ≥ 14 running locally or via Docker
@@ -55,6 +57,7 @@ docker compose up -d
 ```
 
 The Docker Compose stack includes:
+
 - **PostgreSQL 16** — persistent data volume
 - **Izah POS web** — Next.js app, listens on port 3000
 
@@ -81,8 +84,9 @@ docker compose up postgres -d
 ```
 
 This starts Postgres on `localhost:5432` with:
+
 - User: `postgres`
-- Password: `password`  
+- Password: `password`
 - Database: `izah_pos`
 
 ### 3. Configure environment variables
@@ -113,10 +117,10 @@ This applies all Prisma migrations and creates the database schema.
 ### 5. (Optional) Seed sample products
 
 ```bash
-pnpm db:seed
+pnpm db:seed:catalog
 ```
 
-This creates 7 sample products and a default business settings record. Useful for exploring the UI without setting up products manually.
+This creates 8 sample products and a default business settings record. Useful for exploring the UI without setting up products manually.
 
 ### 6. Start the development server
 
@@ -145,12 +149,13 @@ The first time you open the app you will see the **Setup Wizard**. It guides you
 
 ## Seeding Sample Data
 
-The seed script (`prisma/seed.ts`) populates:
-- 7 sample products across categories (Beverages, Snacks, Electronics)
+The credential-free catalog seed (`prisma/seed-catalog.ts`) populates:
+
+- 8 sample products across categories (Beverages and Food)
 - A `BusinessSettings` singleton record with defaults
 
 ```bash
-pnpm db:seed
+pnpm db:seed:catalog
 ```
 
 > **Note:** The seed is idempotent — it upserts records so running it multiple times is safe.
@@ -162,6 +167,7 @@ pnpm db:seed
 ### `ERR_FAILED` or page not loading on localhost
 
 This is usually caused by a stale **Service Worker** from a previous session intercepting requests. To fix:
+
 1. Open Chrome DevTools → **Application** → **Service Workers**
 2. Click **Unregister** for any `localhost` workers
 3. Hard refresh (`Ctrl+Shift+R`)
@@ -201,5 +207,6 @@ Update `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` in your `.env` to match the n
 ### Login loop / redirected back to `/login` immediately after signing in
 
 This can happen if:
+
 - The `izah-setup-complete` cookie is missing — revisit `/setup` to re-run the wizard, or set the cookie manually.
 - `BETTER_AUTH_URL` does not match the origin you are accessing the app from. Update `.env` to match your actual URL (including port).

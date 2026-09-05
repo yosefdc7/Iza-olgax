@@ -1,224 +1,122 @@
 # Deployment Guide
 
-How to deploy Izah POS in production.
+Izah POS is deployed as a standard Next.js application on Netlify Free with
+Supabase Free providing PostgreSQL and product-image storage.
 
----
+## Architecture
 
-## Table of Contents
+| Component           | Service                  | Notes                                        |
+| ------------------- | ------------------------ | -------------------------------------------- |
+| App and API routes  | Netlify                  | Next.js server functions and static assets   |
+| Relational database | Supabase PostgreSQL      | Prisma migrations and Better Auth data       |
+| Product images      | Supabase Storage         | Server-side uploads using a service-role key |
+| Offline cache       | Browser PGLite/IndexedDB | Device-local; unchanged by deployment        |
 
-- [Cloudflare Native Stack (Recommended)](#cloudflare-native-stack-recommended)
-  - [Architecture Overview](#architecture-overview)
-  - [Step 1: Prerequisites & Wrangler Login](#step-1-prerequisites--wrangler-login)
-  - [Step 2: Create Cloudflare D1 Database](#step-2-create-cloudflare-d1-database)
-  - [Step 3: Create Cloudflare R2 Bucket (Image Storage)](#step-3-create-cloudflare-r2-bucket-image-storage)
-  - [Step 4: Update `wrangler.jsonc`](#step-4-update-wranglerjsonc)
-  - [Step 5: Deploy via Git Integration (Zero-Config CI/CD)](#step-5-deploy-via-git-integration-zero-config-cicd)
-  - [Step 6: Direct CLI Deployment Alternative](#step-6-direct-cli-deployment-alternative)
-- [Docker Compose (Self-Hosted)](#docker-compose-self-hosted)
-- [Serverless Deployments (Vercel / Netlify)](#serverless-deployments-vercel--netlify)
-- [Production Environment Variables Checklist](#production-environment-variables-checklist)
-- [Updating](#updating)
+Cloudflare Worker, Pages, and D1 resources are not required for this deployment
+and remain untouched as rollback assets.
 
----
+## 1. Create Supabase resources
 
-## Cloudflare Native Stack (Recommended)
+1. Create a Supabase project in the nearest region.
+2. Create a public Storage bucket named `product-images` so the existing
+   product-image URL contract remains directly readable by the POS client.
+3. Copy the transaction-pooler connection string for runtime traffic and the
+   session/direct connection string for migrations.
+4. Keep the service-role key server-only. Never place it in a `NEXT_PUBLIC_`
+   variable or commit it to the repository.
 
-Izah POS can run **100% natively inside Cloudflare**, eliminating external databases and third-party hosting dependencies.
+## 2. Configure local deployment variables
 
-### Architecture Overview
+Set these values in a local, ignored `.env` file and in Netlify production
+environment variables:
 
-| Component | Cloudflare Service | Description |
-|---|---|---|
-| **App & API Server** | Cloudflare Workers / Pages | Next.js 16 App Router powered by `@opennextjs/cloudflare` |
-| **Database** | Cloudflare D1 | Serverless SQLite database at the edge with `@prisma/adapter-d1` |
-| **Product Images** | Cloudflare R2 | S3-compatible object storage with **0 egress fees** |
-| **CDN & DNS** | Cloudflare Edge Network | Global DDoS protection, SSL, and low-latency asset delivery |
+```env
+DATABASE_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:6543/postgres?pgbouncer=true&connection_limit=1"
+DIRECT_URL="postgresql://postgres.<ref>:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres"
+BETTER_AUTH_SECRET="<random-value-at-least-32-characters>"
+BETTER_AUTH_URL="https://<site>.netlify.app"
+NEXT_PUBLIC_APP_URL="https://<site>.netlify.app"
+SUPABASE_URL="https://<ref>.supabase.co"
+SUPABASE_SERVICE_ROLE_KEY="<server-only-service-role-key>"
+SUPABASE_STORAGE_BUCKET="product-images"
+NODE_ENV="production"
+```
 
----
+## 3. Initialize the fresh database
 
-### Step 1: Prerequisites & Wrangler Login
-
-Make sure you have Node.js 20+ and pnpm installed, then log in to your Cloudflare account from your terminal:
+Run migrations before the first production request:
 
 ```bash
-npx wrangler login
+pnpm install --frozen-lockfile
+pnpm db:generate
+pnpm exec prisma migrate deploy
 ```
 
----
+Do not run the legacy seed because it contains publicly documented sample
+passwords and PINs. Open the deployed app’s setup wizard to create the first
+Admin with user-chosen credentials, then create Cashier users from Settings.
+Load sample catalog data only after the Admin is created.
 
-### Step 2: Create Cloudflare D1 Database
+## 4. Deploy to Netlify
 
-Run the following command in your terminal to create your serverless D1 database:
+The repository includes `netlify.toml` with Node 22 and `pnpm build`. Netlify
+automatically applies its current Next.js adapter; no runtime plugin is pinned
+in the repository. Deploy the current working tree without committing it:
 
 ```bash
-npx wrangler d1 create izah-pos-db
+npx netlify login
+npx netlify init
+npx netlify deploy --build --prod
 ```
 
-Wrangler will output your database details:
-```toml
-[[d1_databases]]
-binding = "DB"
-database_name = "izah-pos-db"
-database_id = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+On Windows, run the deploy command from a Linux environment (for example,
+Docker or CI) if Netlify middleware bundling reports a missing
+`webpack-runtime.js` or `turbopack` file. The application code and middleware do
+not need to change for that workaround.
+
+Use the generated `netlify.app` URL as `BETTER_AUTH_URL` and
+`NEXT_PUBLIC_APP_URL`, then redeploy if those values were not known during the
+first build.
+
+## 5. Verify
+
+- `pnpm lint`, `pnpm exec tsc --noEmit`, `npx vitest run`, and `pnpm build` pass.
+- Setup status, Admin login, four-digit PIN unlock, Cashier switching, role
+  restrictions, products, sales, customers, refunds, reports, offline search,
+  and reload persistence work from a clean browser session.
+- JPEG, PNG, WebP, and GIF uploads return public Supabase Storage URLs; invalid,
+  oversized, and unauthenticated uploads are rejected.
+- No Cloudflare Worker or Pages request is required for the live app.
+
+### Supabase security-advisor follow-up
+
+The fresh project currently reports RLS disabled on the public application
+tables. The app uses direct server-side Prisma credentials rather than the
+Supabase anon API, but do not expose an anon key until app-specific policies
+are reviewed. To apply deny-by-default protection for the public API, run this
+SQL in Supabase after confirming that the server database role remains able to
+operate as intended:
+
+```sql
+ALTER TABLE public."User" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Session" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Account" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Verification" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Product" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Sale" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."SaleItem" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."HeldOrder" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."BusinessSettings" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Customer" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."LoyaltyLog" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."StockAdjustment" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Supplier" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."Refund" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public."_prisma_migrations" ENABLE ROW LEVEL SECURITY;
 ```
 
-Save the `database_id` string for Step 4.
+## Free-tier boundaries
 
----
-
-### Step 3: Create Cloudflare R2 Bucket (Image Storage)
-
-Create an R2 bucket for storing product pictures:
-
-```bash
-npx wrangler r2 bucket create izah-pos-images
-```
-
-#### Enable Public Bucket URL:
-1. In the [Cloudflare Dashboard](https://dash.cloudflare.com/), go to **R2** &rarr; **Overview** &rarr; `izah-pos-images`.
-2. Navigate to **Settings** &rarr; **Public Access**.
-3. Click **Connect Domain** to link a custom subdomain (e.g. `media.yourshop.com`) or enable the default **R2.dev Subdomain** (e.g. `https://pub-xxx.r2.dev`).
-
-#### Create R2 API Tokens (for uploads):
-1. In Cloudflare Dashboard, go to **R2** &rarr; **Manage R2 API Tokens**.
-2. Click **Create API Token**, select **Object Read & Write**, and set TTL/permissions.
-3. Save the `Access Key ID`, `Secret Access Key`, and `Endpoint URL`.
-
----
-
-### Step 4: Update `wrangler.jsonc`
-
-Open [`wrangler.jsonc`](file:///c:/Users/josef/Documents/antigravity/gallant-goodall/izah-pos/wrangler.jsonc) and replace `YOUR_D1_DATABASE_ID_HERE` with your actual database ID from Step 2:
-
-```jsonc
-{
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "izah-pos",
-  "main": ".open-next/worker.js",
-  "compatibility_date": "2024-12-30",
-  "compatibility_flags": ["nodejs_compat"],
-  "assets": {
-    "directory": ".open-next/assets",
-    "binding": "ASSETS"
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "izah-pos-db",
-      "database_id": "YOUR_ACTUAL_D1_DATABASE_ID"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "IMAGES_BUCKET",
-      "bucket_name": "izah-pos-images"
-    }
-  ],
-  "vars": {
-    "BETTER_AUTH_URL": "https://your-subdomain.pages.dev",
-    "NEXT_PUBLIC_APP_URL": "https://your-subdomain.pages.dev"
-  }
-}
-```
-
----
-
-### Step 5: Deploy via Git Integration (Zero-Config CI/CD)
-
-The simplest, automated way to deploy is linking your GitHub or GitLab repository to Cloudflare:
-
-1. Push your repository to GitHub:
-   ```bash
-   git add .
-   git commit -m "feat: configure cloudflare native stack [antigravity]"
-   git push origin main
-   ```
-2. Open the [Cloudflare Dashboard](https://dash.cloudflare.com/) &rarr; **Compute (Workers & Pages)** &rarr; **Create application** &rarr; **Pages** &rarr; **Connect to Git**.
-3. Select your `izah-pos` repository.
-4. **Build Settings**:
-   - **Framework preset**: `None`
-   - **Build command**: `npx @opennextjs/cloudflare build`
-   - **Build output directory**: `.open-next/assets`
-   - **Root directory**: `/` (or leave blank)
-5. **Environment Variables & Secrets**:
-   - `BETTER_AUTH_SECRET`: Generate a 48+ char secret (`openssl rand -base64 48`)
-   - `BETTER_AUTH_URL`: `https://<your-project>.pages.dev` (or your custom domain)
-   - `NEXT_PUBLIC_APP_URL`: `https://<your-project>.pages.dev`
-   - `NODE_ENV`: `production`
-6. **Bindings**:
-   - Go to **Settings** &rarr; **Functions** &rarr; **D1 database bindings** &rarr; Add binding `DB` connected to `izah-pos-db`.
-   - Go to **Settings** &rarr; **Functions** &rarr; **R2 bucket bindings** &rarr; Add binding `IMAGES_BUCKET` connected to `izah-pos-images`.
-7. Click **Save and Deploy**. Cloudflare builds on global edge containers and deploys automatically on every `git push`!
-
----
-
-### Step 6: Direct CLI Deployment Alternative
-
-To deploy manually directly from your command line:
-
-```bash
-pnpm run deploy
-```
-
----
-
-## Docker Compose (Self-Hosted)
-
-For running on your own VPS or local server:
-
-```bash
-# 1. Clone the repo
-git clone https://github.com/izah/izah-pos.git
-cd izah-pos
-
-# 2. Set production environment
-cp .env.example .env
-nano .env
-
-# 3. Build and start
-NEXT_STANDALONE=1 docker compose up -d --build
-
-# 4. Check logs
-docker compose logs -f web
-```
-
-The web service will be available on port **3000**. Put it behind Nginx or Caddy for HTTPS.
-
----
-
-## Serverless Deployments (Vercel / Netlify)
-
-1. Import project in Vercel/Netlify.
-2. Build command: `npx prisma generate && next build`.
-3. Set `DATABASE_URL` to your remote database (e.g. Neon or Supabase).
-
----
-
-## Production Environment Variables Checklist
-
-| Variable | Required | Description | Example |
-|---|---|---|---|
-| `BETTER_AUTH_SECRET` | **Yes** | 32+ character random secret for signing tokens | `openssl rand -base64 48` |
-| `BETTER_AUTH_URL` | **Yes** | Canonical public URL | `https://pos.yourshop.com` |
-| `NEXT_PUBLIC_APP_URL` | **Yes** | Public frontend URL | `https://pos.yourshop.com` |
-| `NODE_ENV` | **Yes** | Environment mode | `production` |
-| `R2_ACCOUNT_ID` | Optional | Cloudflare account ID for R2 storage | `abc12345...` |
-| `R2_ACCESS_KEY_ID` | Optional | R2 API token access key | `xyz...` |
-| `R2_SECRET_ACCESS_KEY` | Optional | R2 API token secret | `secret...` |
-| `R2_BUCKET_NAME` | Optional | Name of R2 images bucket | `izah-pos-images` |
-| `R2_PUBLIC_URL` | Optional | Public CDN or custom domain URL for images | `https://media.yourshop.com` |
-
----
-
-## Updating
-
-When a new version is released:
-
-### Cloudflare Pages
-Simply push your updates to `main` branch. Cloudflare will automatically build and deploy the update with zero downtime.
-
-### Docker
-```bash
-git pull origin main
-docker compose up -d --build
-```
+Netlify Free and Supabase Free are suitable for low-volume use only. Monitor
+Netlify’s monthly credits and Supabase’s database, storage, bandwidth, and
+inactivity limits before using this deployment for sustained commercial traffic.

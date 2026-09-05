@@ -4,8 +4,7 @@
  *
  * Supported providers:
  *   local        – write to public/uploads/ (self-hosted only)
- *   vercel_blob  – @vercel/blob (BLOB_READ_WRITE_TOKEN env var required)
- *   cloudflare_r2 / s3 – AWS S3-compatible (credentials stored in DB settings)
+ *   supabase     – Supabase Storage using server-only service-role credentials
  */
 
 import path from "path";
@@ -25,32 +24,23 @@ export async function uploadFile(
     where: { id: "singleton" },
     select: {
       storageProvider: true,
-      storageRegion: true,
       storageBucket: true,
-      storageEndpoint: true,
-      storageAccessKey: true,
-      storageSecretKey: true,
-      storagePublicUrl: true,
     },
   });
 
-  const provider = settings?.storageProvider ?? "local";
+  const provider =
+    (process.env.NODE_ENV as string | undefined) === "production"
+      ? "supabase"
+      : (settings?.storageProvider ?? "local");
 
   switch (provider) {
-    case "vercel_blob":
-      return uploadVercelBlob(buffer, filename, contentType);
-
-    case "cloudflare_r2":
-    case "s3":
-      return uploadS3Compatible(buffer, filename, contentType, {
-        bucket: settings?.storageBucket ?? "",
-        region: settings?.storageRegion ?? (provider === "cloudflare_r2" ? "auto" : "us-east-1"),
-        endpoint: settings?.storageEndpoint ?? undefined,
-        accessKeyId: settings?.storageAccessKey ?? "",
-        secretAccessKey: settings?.storageSecretKey ?? "",
-        publicUrl: settings?.storagePublicUrl ?? undefined,
-        forcePathStyle: provider === "cloudflare_r2",
-      });
+    case "supabase":
+      return uploadSupabaseStorage(
+        buffer,
+        filename,
+        contentType,
+        settings?.storageBucket ?? undefined
+      );
 
     default:
       return uploadLocal(buffer, filename);
@@ -66,64 +56,39 @@ async function uploadLocal(buffer: Buffer, filename: string): Promise<UploadResu
   return { url: `/uploads/${filename}` };
 }
 
-// ─── Vercel Blob ───────────────────────────────────────────────────────────────
+// ─── Supabase Storage ─────────────────────────────────────────────────────────
 
-async function uploadVercelBlob(
-  buffer: Buffer,
-  filename: string,
-  contentType: string
-): Promise<UploadResult> {
-  const { put } = await import("@vercel/blob");
-  const blob = await put(`uploads/${filename}`, buffer, {
-    access: "public",
-    contentType,
-  });
-  return { url: blob.url };
-}
-
-// ─── S3-compatible (AWS S3 + Cloudflare R2) ───────────────────────────────────
-
-interface S3Config {
-  bucket: string;
-  region: string;
-  endpoint?: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  publicUrl?: string;
-  forcePathStyle?: boolean;
-}
-
-async function uploadS3Compatible(
+async function uploadSupabaseStorage(
   buffer: Buffer,
   filename: string,
   contentType: string,
-  config: S3Config
+  configuredBucket?: string
 ): Promise<UploadResult> {
-  const { S3Client, PutObjectCommand } = await import("@aws-sdk/client-s3");
-
-  const client = new S3Client({
-    region: config.region,
-    ...(config.endpoint ? { endpoint: config.endpoint } : {}),
-    credentials: {
-      accessKeyId: config.accessKeyId,
-      secretAccessKey: config.secretAccessKey,
-    },
-    forcePathStyle: config.forcePathStyle ?? false,
-  });
+  const baseUrl = process.env.SUPABASE_URL?.replace(/\/$/, "");
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const bucket = configuredBucket || process.env.SUPABASE_STORAGE_BUCKET;
+  if (!baseUrl || !serviceRoleKey || !bucket) {
+    throw new Error("Supabase Storage is not configured");
+  }
 
   const key = `uploads/${filename}`;
-  await client.send(
-    new PutObjectCommand({
-      Bucket: config.bucket,
-      Key: key,
-      Body: buffer,
-      ContentType: contentType,
-    })
+  const response = await fetch(
+    `${baseUrl}/storage/v1/object/${encodeURIComponent(bucket)}/${key}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        "Content-Type": contentType,
+        "x-upsert": "false",
+      },
+      body: buffer as unknown as BodyInit,
+    }
   );
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Supabase Storage upload failed (${response.status}): ${detail}`);
+  }
 
-  const url = config.publicUrl
-    ? `${config.publicUrl.replace(/\/$/, "")}/${key}`
-    : `https://${config.bucket}.s3.${config.region}.amazonaws.com/${key}`;
-
-  return { url };
+  return { url: `${baseUrl}/storage/v1/object/public/${encodeURIComponent(bucket)}/${key}` };
 }

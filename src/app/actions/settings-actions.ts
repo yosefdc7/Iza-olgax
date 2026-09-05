@@ -2,10 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/db";
+import { isValidTimeZone } from "@/lib/daily-ledger";
 
 export async function updateSettings(formData: FormData) {
   const raw = Object.fromEntries(formData.entries());
   const taxRatePercent = parseFloat(raw.taxRate as string) || 0;
+
+  const requestedStorageProvider = (raw.storageProvider as string) || "local";
+  const isProduction = (process.env.NODE_ENV as string | undefined) === "production";
+  const storageProvider = isProduction
+    ? "supabase"
+    : requestedStorageProvider === "supabase"
+      ? "supabase"
+      : "local";
 
   const shared = {
     name: (raw.name as string) || "My Store",
@@ -18,31 +27,35 @@ export async function updateSettings(formData: FormData) {
     taxName: (raw.taxName as string) || "Tax",
     receiptFooter: (raw.receiptFooter as string) || "",
     language: (raw.language as string) || "en",
+    businessTimezone: (raw.businessTimezone as string) || "Asia/Manila",
     loyaltyEnabled: raw.loyaltyEnabled === "true",
     loyaltyEarnRate: parseFloat(raw.loyaltyEarnRate as string) || 1,
     loyaltyRedeemValue: parseFloat(raw.loyaltyRedeemValue as string) || 100,
     lowStockThreshold: parseInt(raw.lowStockThreshold as string, 10) || 5,
     posAutoLockMinutes: parseInt(raw.posAutoLockMinutes as string, 10) || 0,
     // Storage
-    storageProvider: (raw.storageProvider as string) || "local",
-    storageRegion: (raw.storageRegion as string) || null,
-    storageBucket: (raw.storageBucket as string) || null,
-    storageEndpoint: (raw.storageEndpoint as string) || null,
-    storageAccessKey: (raw.storageAccessKey as string) || null,
+    storageProvider,
+    storageRegion: null,
+    storageBucket:
+      storageProvider === "supabase"
+        ? (raw.storageBucket as string) || process.env.SUPABASE_STORAGE_BUCKET || null
+        : null,
+    storageEndpoint: null,
+    storageAccessKey: null,
     storagePublicUrl: (raw.storagePublicUrl as string) || null,
+    // Credentials are supplied through the hosting environment, never stored
+    // in the BusinessSettings compatibility columns.
+    storageSecretKey: null,
   };
 
-  // storageSecretKey is never sent back to the client, so only update it when
-  // the user explicitly provides a new value (non-empty string).
-  const newSecretKey = (raw.storageSecretKey as string) || "";
-  const updatePayload = newSecretKey
-    ? { ...shared, storageSecretKey: newSecretKey }
-    : shared;
+  if (!isValidTimeZone(shared.businessTimezone)) {
+    throw new Error("Invalid business time zone");
+  }
 
   await prisma.businessSettings.upsert({
     where: { id: "singleton" },
-    create: { ...shared, storageSecretKey: newSecretKey || null },
-    update: updatePayload,
+    create: shared,
+    update: shared,
   });
 
   revalidatePath("/settings");

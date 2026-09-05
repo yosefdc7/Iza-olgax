@@ -13,6 +13,8 @@ interface ProductResult {
   name: string;
   price: number;
   stock: number;
+  unit: string;
+  quantityPrecision: number;
   barcode?: string | null;
   sku?: string | null;
   category?: string | null;
@@ -59,7 +61,11 @@ export function ProductSearch() {
       if (typeof navigator !== "undefined" && !navigator.onLine) {
         const { searchProductsOffline } = await import("@/lib/pglite");
         const data = await searchProductsOffline(q);
-        setResults(data);
+        setResults(data.map((product) => ({
+          ...product,
+          unit: "unit" in product && typeof product.unit === "string" ? product.unit : "pc",
+          quantityPrecision: "quantityPrecision" in product && typeof product.quantityPrecision === "number" ? product.quantityPrecision : 0,
+        })));
       } else {
         const res = await fetch(`/api/products/search?q=${encodeURIComponent(q)}`);
         const data = await res.json();
@@ -101,6 +107,8 @@ export function ProductSearch() {
       name: product.name,
       price: product.price,
       stock: product.stock,
+      unit: product.unit,
+      quantityPrecision: product.quantityPrecision,
     });
     setQuery("");
     setResults([]);

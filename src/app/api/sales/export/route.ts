@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { Prisma } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import {
+  businessDateForInstant,
+  businessDayUtcRange,
+  csvCell,
+  isValidBusinessDate,
+  isValidTimeZone,
+  resolveLedgerScope,
+} from "@/lib/daily-ledger";
 
 export async function GET(request: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -10,21 +19,49 @@ export async function GET(request: NextRequest) {
   }
 
   const { searchParams } = new URL(request.url);
-  const from = searchParams.get("from");
-  const to = searchParams.get("to");
+  const settings = await prisma.businessSettings.findUnique({
+    where: { id: "singleton" },
+    select: { businessTimezone: true },
+  });
+  const timeZone = isValidTimeZone(settings?.businessTimezone ?? "")
+    ? (settings?.businessTimezone ?? "Asia/Manila")
+    : "Asia/Manila";
+  const isAdmin = session.user.role === "ADMIN";
+  const today = businessDateForInstant(new Date(), timeZone);
+  const scope = isAdmin
+    ? {
+        from: searchParams.get("from"),
+        to: searchParams.get("to"),
+        cashierId: null,
+      }
+    : resolveLedgerScope({
+        role: "CASHIER",
+        userId: session.user.id,
+        today,
+        requested: { from: searchParams.get("from"), to: searchParams.get("to") },
+      });
 
-  const where: Record<string, unknown> = {};
-  if (from || to) {
-    where.createdAt = {
-      ...(from ? { gte: new Date(from) } : {}),
-      ...(to ? { lte: new Date(to) } : {}),
-    };
+  if (
+    (scope.from !== null && !isValidBusinessDate(scope.from)) ||
+    (scope.to !== null && !isValidBusinessDate(scope.to)) ||
+    (scope.from !== null && scope.to !== null && scope.from > scope.to)
+  ) {
+    return NextResponse.json({ error: "Invalid report date range" }, { status: 400 });
   }
+
+  const dateFilter: Prisma.DateTimeFilter = {};
+  if (scope.from) dateFilter.gte = businessDayUtcRange(scope.from, timeZone).start;
+  if (scope.to) dateFilter.lt = businessDayUtcRange(scope.to, timeZone).endExclusive;
+
+  const where: Prisma.SaleWhereInput = {
+    ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+    ...(scope.cashierId ? { userId: scope.cashierId } : {}),
+  };
 
   const sales = await prisma.sale.findMany({
     where,
     include: {
-      items: { include: { product: { select: { name: true, sku: true } } } },
+      items: { select: { quantity: true, name: true } },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -33,7 +70,7 @@ export async function GET(request: NextRequest) {
   const rows: string[] = [
     [
       "Sale ID",
-      "Date",
+      "Business Date",
       "Status",
       "Payment Method",
       "Subtotal",
@@ -41,26 +78,30 @@ export async function GET(request: NextRequest) {
       "Tax",
       "Total",
       "Items",
-    ].join(","),
+    ]
+      .map(csvCell)
+      .join(","),
   ];
 
   for (const sale of sales) {
     const itemsSummary = sale.items
-      .map((i: typeof sale.items[number]) => `${i.quantity}x ${i.product?.name ?? i.name}`)
+      .map((i: (typeof sale.items)[number]) => `${i.quantity}x ${i.name}`)
       .join("; ");
 
     rows.push(
       [
         sale.id,
-        sale.createdAt.toISOString(),
+        businessDateForInstant(sale.createdAt, timeZone),
         sale.status,
         sale.paymentMethod,
         sale.subtotal.toFixed(2),
         sale.discountAmount.toFixed(2),
         sale.taxAmount.toFixed(2),
         sale.total.toFixed(2),
-        `"${itemsSummary.replace(/"/g, '""')}"`,
-      ].join(",")
+        itemsSummary,
+      ]
+        .map(csvCell)
+        .join(",")
     );
   }
 
@@ -70,7 +111,7 @@ export async function GET(request: NextRequest) {
     status: 200,
     headers: {
       "Content-Type": "text/csv",
-      "Content-Disposition": `attachment; filename="sales-export-${Date.now()}.csv"`,
+      "Content-Disposition": `attachment; filename="sales-export-${scope.from ?? "all"}-to-${scope.to ?? "all"}.csv"`,
     },
   });
 }

@@ -20,6 +20,7 @@ const settingsSchema = z.object({
   taxName: z.string().min(1),
   receiptFooter: z.string().max(500),
   language: z.string().min(2).max(10),
+  businessTimezone: z.string().min(1),
   // Loyalty
   loyaltyEnabled: z.boolean().optional(),
   loyaltyEarnRate: z.number().min(0),
@@ -52,6 +53,7 @@ type SettingsFormValues = {
   taxName: string;
   receiptFooter: string;
   language: string;
+  businessTimezone: string;
   loyaltyEnabled?: boolean;
   loyaltyEarnRate: number;
   loyaltyRedeemValue: number;
@@ -78,6 +80,7 @@ interface Props {
     taxName: string;
     receiptFooter: string;
     language: string;
+    businessTimezone: string;
     loyaltyEnabled: boolean;
     loyaltyEarnRate: { toString(): string };
     loyaltyRedeemValue: { toString(): string };
@@ -115,13 +118,15 @@ export function SettingsForm({ settings }: Props) {
       taxName: settings.taxName,
       receiptFooter: settings.receiptFooter,
       language: settings.language,
+      businessTimezone: settings.businessTimezone,
       loyaltyEnabled: settings.loyaltyEnabled,
       loyaltyEarnRate: parseFloat(settings.loyaltyEarnRate.toString()),
       loyaltyRedeemValue: parseFloat(settings.loyaltyRedeemValue.toString()),
       lowStockThreshold: settings.lowStockThreshold,
       posAutoLockMinutes: settings.posAutoLockMinutes ?? 0,
       // Storage — secret key intentionally never pre-filled (security)
-      storageProvider: settings.storageProvider,
+      storageProvider:
+        process.env.NODE_ENV === "production" ? "supabase" : settings.storageProvider,
       storageRegion: settings.storageRegion ?? "",
       storageBucket: settings.storageBucket ?? "",
       storageEndpoint: settings.storageEndpoint ?? "",
@@ -132,6 +137,7 @@ export function SettingsForm({ settings }: Props) {
   });
 
   const storageProvider = watch("storageProvider");
+  const isProduction = process.env.NODE_ENV === "production";
 
   async function onSubmit(values: SettingsFormValues) {
     const fd = new FormData();
@@ -167,7 +173,7 @@ export function SettingsForm({ settings }: Props) {
           )}
         />
         {errors[name] && (
-          <p className="text-xs text-destructive">{String(errors[name]?.message)}</p>
+          <p className="text-destructive text-xs">{String(errors[name]?.message)}</p>
         )}
       </div>
     );
@@ -177,14 +183,27 @@ export function SettingsForm({ settings }: Props) {
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
       {/* Business */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Business</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Business</h2>
         {field("Business Name *", "name", { placeholder: "My Store" })}
         {field("Logo URL", "logoUrl", { type: "url", placeholder: "https://…" })}
+        <div className="space-y-1.5">
+          <label className="text-sm font-medium">Business Time Zone</label>
+          <select
+            {...register("businessTimezone")}
+            className="border-input bg-background flex h-10 w-full rounded-md border px-3 text-sm"
+          >
+            <option value="Asia/Manila">Asia/Manila</option>
+            <option value="Asia/Singapore">Asia/Singapore</option>
+            <option value="UTC">UTC</option>
+            <option value="America/New_York">America/New_York</option>
+            <option value="Europe/London">Europe/London</option>
+          </select>
+        </div>
       </section>
 
       {/* Appearance */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Appearance</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Appearance</h2>
         <div className="grid grid-cols-2 gap-4">
           {field("Primary Color", "primaryColor", { type: "color" })}
           {field("Accent Color", "accentColor", { type: "color" })}
@@ -193,7 +212,7 @@ export function SettingsForm({ settings }: Props) {
 
       {/* Currency & Tax */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Currency & Tax</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Currency & Tax</h2>
         <div className="grid grid-cols-2 gap-4">
           {field("Currency Symbol", "currency", { placeholder: "$" })}
           {field("Decimal Places", "currencyDecimals", { type: "number", min: "0", max: "4" })}
@@ -206,13 +225,13 @@ export function SettingsForm({ settings }: Props) {
 
       {/* Receipt */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Receipt</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Receipt</h2>
         {field("Footer Text", "receiptFooter", { placeholder: "Thank you!" })}
       </section>
 
       {/* Language */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Language</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Language</h2>
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Language</label>
           <select
@@ -239,52 +258,72 @@ export function SettingsForm({ settings }: Props) {
 
       {/* Loyalty */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Loyalty Program</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Loyalty Program</h2>
         <div className="flex items-center justify-between rounded-lg border p-4">
           <div>
             <p className="text-sm font-medium">Enable Loyalty Points</p>
-            <p className="text-xs text-muted-foreground">Let customers earn and redeem points on purchases</p>
+            <p className="text-muted-foreground text-xs">
+              Let customers earn and redeem points on purchases
+            </p>
           </div>
           <input
             type="checkbox"
             {...register("loyaltyEnabled")}
-            className="h-4 w-4 rounded border-input accent-primary cursor-pointer"
+            className="border-input accent-primary h-4 w-4 cursor-pointer rounded"
           />
         </div>
         <div className="grid grid-cols-2 gap-4">
-          {field("Earn Rate (pts per $1)", "loyaltyEarnRate", { type: "number", step: "0.01", min: "0", placeholder: "1" })}
-          {field("Redeem Rate (pts per $1 off)", "loyaltyRedeemValue", { type: "number", step: "1", min: "1", placeholder: "100" })}
+          {field("Earn Rate (pts per $1)", "loyaltyEarnRate", {
+            type: "number",
+            step: "0.01",
+            min: "0",
+            placeholder: "1",
+          })}
+          {field("Redeem Rate (pts per $1 off)", "loyaltyRedeemValue", {
+            type: "number",
+            step: "1",
+            min: "1",
+            placeholder: "100",
+          })}
         </div>
-        <p className="text-xs text-muted-foreground">
-          Example: Earn Rate = 1, Redeem Rate = 100 → customer earns 1 pt per $1 spent, and 100 pts = $1 discount.
+        <p className="text-muted-foreground text-xs">
+          Example: Earn Rate = 1, Redeem Rate = 100 → customer earns 1 pt per $1 spent, and 100 pts
+          = $1 discount.
         </p>
       </section>
 
       {/* Inventory */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Inventory</h2>
-        {field("Low Stock Threshold (default)", "lowStockThreshold", { type: "number", min: "0", step: "1", placeholder: "5" })}
-        <p className="text-xs text-muted-foreground">Products with stock at or below this level will show low-stock alerts.</p>
+        <h2 className="border-b pb-2 text-base font-semibold">Inventory</h2>
+        {field("Low Stock Threshold (default)", "lowStockThreshold", {
+          type: "number",
+          min: "0",
+          step: "1",
+          placeholder: "5",
+        })}
+        <p className="text-muted-foreground text-xs">
+          Products with stock at or below this level will show low-stock alerts.
+        </p>
 
         {/* Low-stock email alert — placeholder UI, actual emails ship in v0.3 */}
-        <div className="rounded-lg border border-dashed p-4 space-y-3 opacity-80">
-          <div className="flex items-center gap-2 flex-wrap">
+        <div className="space-y-3 rounded-lg border border-dashed p-4 opacity-80">
+          <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-sm font-medium">Low-Stock Email Alerts</h3>
-            <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">
+            <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
               Coming in v0.3
             </span>
           </div>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             Receive an email when a product’s stock drops to or below the threshold above.
           </p>
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+          <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
             <input
               type="email"
               disabled
               placeholder="alert@example.com"
-              className="flex-1 h-9 w-full rounded-md border border-input bg-muted px-3 text-sm text-muted-foreground cursor-not-allowed"
+              className="border-input bg-muted text-muted-foreground h-9 w-full flex-1 cursor-not-allowed rounded-md border px-3 text-sm"
             />
-            <label className="flex items-center gap-2 cursor-not-allowed opacity-60 shrink-0">
+            <label className="flex shrink-0 cursor-not-allowed items-center gap-2 opacity-60">
               <input type="checkbox" disabled className="accent-primary" />
               <span className="text-sm">Enabled</span>
             </label>
@@ -294,7 +333,7 @@ export function SettingsForm({ settings }: Props) {
 
       {/* Image Storage */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">Image Storage</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">Image Storage</h2>
 
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Storage Provider</label>
@@ -302,69 +341,37 @@ export function SettingsForm({ settings }: Props) {
             {...register("storageProvider")}
             className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
           >
-            <option value="local">Local (public/uploads/) — self-hosted only</option>
-            <option value="vercel_blob">Vercel Blob</option>
-            <option value="cloudflare_r2">Cloudflare R2</option>
-            <option value="s3">AWS S3</option>
+            {!isProduction && (
+              <option value="local">Local (public/uploads/) — self-hosted only</option>
+            )}
+            <option value="supabase">Supabase Storage</option>
           </select>
-          <p className="text-xs text-muted-foreground">
-            Where product images are stored after upload.
+          <p className="text-muted-foreground text-xs">
+            Where product images are stored after upload. Supabase Storage is the hosted option for
+            this deployment.
           </p>
         </div>
 
         {storageProvider === "local" && (
-          <div className="rounded-lg border border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800 p-4 text-sm text-amber-800 dark:text-amber-300">
-            Files are saved to <code className="font-mono bg-amber-100 dark:bg-amber-900 px-1 rounded">public/uploads/</code> on your server.
-            This does <strong>not</strong> work on serverless platforms like Vercel — choose a cloud provider instead.
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-300">
+            Files are saved to{" "}
+            <code className="rounded bg-amber-100 px-1 font-mono dark:bg-amber-900">
+              public/uploads/
+            </code>{" "}
+            on your server. This does <strong>not</strong> work on serverless platforms like Netlify
+            — choose Supabase Storage instead.
           </div>
         )}
 
-        {storageProvider === "vercel_blob" && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 dark:border-blue-800 p-4 space-y-2 text-sm">
-            <p className="font-medium text-blue-800 dark:text-blue-300">Vercel Blob Setup</p>
-            <p className="text-muted-foreground">
-              Set the{" "}
-              <code className="font-mono bg-muted px-1 rounded">BLOB_READ_WRITE_TOKEN</code>{" "}
-              environment variable in your Vercel project or <code className="font-mono bg-muted px-1 rounded">.env</code> file.
-              No other configuration is needed.
-            </p>
-          </div>
-        )}
-
-        {(storageProvider === "cloudflare_r2" || storageProvider === "s3") && (
+        {storageProvider === "supabase" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              {field("Bucket Name", "storageBucket", { placeholder: "my-bucket" })}
-              {field(
-                "Region",
-                "storageRegion",
-                { placeholder: storageProvider === "cloudflare_r2" ? "auto" : "us-east-1" }
-              )}
-            </div>
-            {storageProvider === "cloudflare_r2" &&
-              field("R2 Endpoint URL", "storageEndpoint", {
-                placeholder: "https://<account-id>.r2.cloudflarestorage.com",
-              })
-            }
-            {field("Access Key ID", "storageAccessKey", { placeholder: "Access key ID", autoComplete: "off" })}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Secret Access Key</label>
-              <input
-                {...register("storageSecretKey")}
-                type="password"
-                autoComplete="new-password"
-                placeholder={settings.hasStorageSecretKey ? "Leave blank to keep current key" : "Secret access key"}
-                className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-10 w-full rounded-md border px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
-              />
-            </div>
-            {field("Public URL (CDN base)", "storagePublicUrl", {
-              placeholder: storageProvider === "cloudflare_r2"
-                ? "https://pub-xxx.r2.dev"
-                : "https://cdn.example.com",
-              type: "url",
-            })}
-            <p className="text-xs text-amber-600 dark:text-amber-400">
-              ⚠ Credentials are stored in the database. Use a dedicated IAM / API token with write-only access to this bucket.
+            {field("Bucket Name", "storageBucket", { placeholder: "product-images" })}
+            <p className="text-muted-foreground text-xs">
+              Set <code className="bg-muted rounded px-1 font-mono">SUPABASE_URL</code>,{" "}
+              <code className="bg-muted rounded px-1 font-mono">SUPABASE_SERVICE_ROLE_KEY</code>,
+              and <code className="bg-muted rounded px-1 font-mono">SUPABASE_STORAGE_BUCKET</code>{" "}
+              in the hosting provider. The service-role key is server-only and is never stored in
+              the database or sent to the browser.
             </p>
           </div>
         )}
@@ -372,7 +379,7 @@ export function SettingsForm({ settings }: Props) {
 
       {/* POS Terminal Security */}
       <section className="space-y-4">
-        <h2 className="text-base font-semibold border-b pb-2">POS Terminal Security</h2>
+        <h2 className="border-b pb-2 text-base font-semibold">POS Terminal Security</h2>
         <div className="space-y-1.5">
           <label className="text-sm font-medium">Inactivity Auto-Lock Timer</label>
           <select
@@ -385,7 +392,7 @@ export function SettingsForm({ settings }: Props) {
             <option value={15}>15 Minutes</option>
             <option value={30}>30 Minutes</option>
           </select>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             Automatically lock the POS register and require a 4-digit PIN when idle.
           </p>
         </div>

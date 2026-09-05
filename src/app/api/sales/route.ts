@@ -1,29 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
+import { z } from "zod";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { z } from "zod";
 import { pluginRegistry } from "@/lib/plugins";
+import { quantityFitsPrecision } from "@/lib/daily-ledger";
 
 const saleSchema = z.object({
-  items: z.array(
-    z.object({
-      productId: z.string(),
-      name: z.string(),
-      price: z.number(),
-      quantity: z.number().int().min(1),
-      notes: z.string().optional(),
-    })
-  ).min(1),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        // Kept for queue/client compatibility; the server derives both from Product.
+        name: z.string().optional(),
+        price: z.number().finite().optional(),
+        quantity: z.number().finite().positive(),
+        notes: z.string().optional(),
+      })
+    )
+    .min(1),
+  // Optional keeps older queued payloads replayable; the first active series is used.
+  receiptSeriesId: z.string().min(1).optional(),
   paymentMethod: z.enum(["CASH", "CARD", "OTHER"]).default("CASH"),
-  amountTendered: z.number().optional(),
-  paymentLines: z.array(z.object({
-    method: z.enum(["CASH", "CARD", "OTHER"]),
-    amount: z.number().min(0),
-  })).optional(),
-  tipAmount: z.number().min(0).default(0),
-  taxRate: z.number().min(0).max(1).default(0),
-  discountAmount: z.number().min(0).default(0),
+  amountTendered: z.number().finite().nonnegative().optional(),
+  paymentLines: z
+    .array(
+      z.object({
+        method: z.enum(["CASH", "CARD", "OTHER"]),
+        amount: z.number().finite().min(0),
+      })
+    )
+    .optional(),
+  tipAmount: z.number().finite().min(0).default(0),
+  taxRate: z.number().finite().min(0).max(1).default(0),
+  discountAmount: z.number().finite().min(0).default(0),
   discountType: z.enum(["fixed", "percent"]).default("fixed"),
   note: z.string().optional(),
   customerId: z.string().optional(),
@@ -31,29 +41,45 @@ const saleSchema = z.object({
   loyaltyPointsUsed: z.number().int().min(0).default(0),
 });
 
+class SaleInputError extends Error {}
+class ReceiptSeriesUnavailableError extends Error {}
+
+type LoyaltySettings = { enabled: boolean; earnRate: number; redeemValue: number };
+
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
-  if (!session) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
-  const parsed = saleSchema.safeParse(body);
+  const parsed = saleSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
 
-  const { items, paymentMethod, amountTendered, paymentLines, tipAmount, taxRate, discountAmount, discountType, note, customerId, loyaltyPointsUsed } =
-    parsed.data;
+  const {
+    items,
+    receiptSeriesId,
+    paymentMethod,
+    amountTendered,
+    paymentLines,
+    tipAmount,
+    taxRate,
+    discountAmount,
+    discountType,
+    note,
+    customerId,
+    loyaltyPointsUsed,
+  } = parsed.data;
 
-  // Derive primary paymentMethod from largest split-tender line (if split mode)
   const effectiveMethod: "CASH" | "CARD" | "OTHER" =
     paymentLines && paymentLines.length > 0
-      ? (paymentLines.reduce((a, b) => (a.amount >= b.amount ? a : b)).method as "CASH" | "CARD" | "OTHER")
+      ? paymentLines.reduce((a, b) => (a.amount >= b.amount ? a : b)).method
       : paymentMethod;
+  const paidTotal =
+    paymentLines && paymentLines.length > 0
+      ? paymentLines.reduce((sum, line) => sum + line.amount, 0)
+      : (amountTendered ?? 0);
 
-  // Load loyalty settings if customer is attached
-  let loyaltySettings: { enabled: boolean; earnRate: number; redeemValue: number } | null = null;
+  let loyaltySettings: LoyaltySettings | null = null;
   if (customerId) {
     const settings = await prisma.businessSettings.findUnique({ where: { id: "singleton" } });
     if (settings?.loyaltyEnabled) {
@@ -65,109 +91,233 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0);
-  const discountValue =
-    discountType === "percent" ? (subtotal * discountAmount) / 100 : Math.min(discountAmount, subtotal);
-  // Loyalty redemption discount (points / redeemValue = $ discount)
-  const loyaltyDiscount = loyaltySettings && loyaltyPointsUsed > 0
-    ? loyaltyPointsUsed / loyaltySettings.redeemValue
-    : 0;
-  const totalDiscount = discountValue + loyaltyDiscount;
-  const taxAmt = (subtotal - totalDiscount) * taxRate;
-  const total = subtotal - totalDiscount + taxAmt + (tipAmount ?? 0);
+  try {
+    const sale = await prisma.$transaction(async (tx) => {
+      const issued = receiptSeriesId
+        ? await tx.$queryRaw<Array<{ id: string; name: string; receiptNumber: number }>>`
+            UPDATE "ReceiptSeries"
+            SET "nextNumber" = "nextNumber" + 1, "updatedAt" = NOW()
+            WHERE "id" = ${receiptSeriesId} AND "active" = true
+            RETURNING "id", "name", "nextNumber" - 1 AS "receiptNumber"
+          `
+        : await tx.$queryRaw<Array<{ id: string; name: string; receiptNumber: number }>>`
+            UPDATE "ReceiptSeries"
+            SET "nextNumber" = "nextNumber" + 1, "updatedAt" = NOW()
+            WHERE "id" = (
+              SELECT "id" FROM "ReceiptSeries"
+              WHERE "active" = true
+              ORDER BY "name" ASC
+              LIMIT 1
+            )
+            RETURNING "id", "name", "nextNumber" - 1 AS "receiptNumber"
+          `;
+      if (issued.length !== 1) throw new ReceiptSeriesUnavailableError();
 
-  // Change due: cash single-method or from split lines total
-  const paidTotal = paymentLines && paymentLines.length > 0
-    ? paymentLines.reduce((s, p) => s + p.amount, 0)
-    : (amountTendered ?? 0);
-  const changeDue =
-    (effectiveMethod === "CASH" || (paymentLines?.some((p) => p.method === "CASH")))
-      ? Math.max(0, paidTotal - total)
-      : undefined;
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sale = await prisma.$transaction(async (tx: any) => {
-    const created = await tx.sale.create({
-      data: {
-        userId: session.user.id,
-        customerId: customerId || undefined,
-        subtotal,
-        taxRate,
-        taxAmount: taxAmt,
-        discountAmount: totalDiscount,
-        tipAmount: tipAmount ?? 0,
-        total,
-        paymentMethod: effectiveMethod,
-        paymentLines: paymentLines && paymentLines.length > 0 ? paymentLines : undefined,
-        amountTendered: amountTendered ?? (paidTotal > 0 ? paidTotal : undefined),
-        changeDue,
-        notes: note,
-        items: {
-          create: items.map((i) => ({
-            productId: i.productId,
-            name: i.name,
-            price: i.price,
-            quantity: i.quantity,
-            total: i.price * i.quantity,
-            notes: i.notes ?? undefined,
-          })),
+      const products = await tx.product.findMany({
+        where: { id: { in: items.map((item) => item.productId) } },
+        select: {
+          id: true,
+          name: true,
+          price: true,
+          unit: true,
+          quantityPrecision: true,
+          cost: true,
+          active: true,
         },
-      },
-      include: { items: true },
+      });
+      const productMap = new Map(products.map((product) => [product.id, product] as const));
+      const normalizedItems = items.map((item) => {
+        const product = productMap.get(item.productId);
+        if (!product) throw new SaleInputError(`Product not found: ${item.productId}`);
+        if (!product.active) throw new SaleInputError(`${product.name} is inactive`);
+        if (!quantityFitsPrecision(item.quantity, product.quantityPrecision)) {
+          throw new SaleInputError(
+            `${product.name} allows at most ${product.quantityPrecision} decimal places`
+          );
+        }
+        return {
+          productId: product.id,
+          name: product.name,
+          price: parseFloat(product.price.toString()),
+          quantity: item.quantity,
+          unit: product.unit,
+          unitCost: product.cost == null ? null : parseFloat(product.cost.toString()),
+          notes: item.notes,
+        };
+      });
+
+      let customer: { loyaltyPoints: number } | null = null;
+      if (customerId) {
+        // Validate and lock the customer so concurrent redemptions cannot
+        // both pass the points-balance check before decrementing it.
+        await tx.$queryRaw`SELECT "id" FROM "Customer" WHERE "id" = ${customerId} FOR UPDATE`;
+        customer = await tx.customer.findUnique({
+          where: { id: customerId },
+          select: { loyaltyPoints: true },
+        });
+        if (!customer) throw new SaleInputError("Customer not found");
+      }
+
+      const subtotal = normalizedItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const discountValue =
+        discountType === "percent"
+          ? (subtotal * discountAmount) / 100
+          : Math.min(discountAmount, subtotal);
+
+      if (
+        loyaltyPointsUsed > 0 &&
+        (!customerId ||
+          !loyaltySettings?.enabled ||
+          !Number.isFinite(loyaltySettings.redeemValue) ||
+          loyaltySettings.redeemValue <= 0)
+      ) {
+        throw new SaleInputError("Loyalty redemption requires an enabled customer account");
+      }
+
+      let loyaltyDiscount = 0;
+      if (loyaltySettings?.enabled && loyaltyPointsUsed > 0) {
+        if (!customer) throw new SaleInputError("Customer not found");
+        if (loyaltyPointsUsed > customer.loyaltyPoints) {
+          throw new SaleInputError("Insufficient loyalty points");
+        }
+        loyaltyDiscount = Math.min(
+          loyaltyPointsUsed / loyaltySettings.redeemValue,
+          Math.max(0, subtotal - discountValue)
+        );
+      }
+
+      const totalDiscount = Math.min(subtotal, discountValue + loyaltyDiscount);
+      const taxAmt = (subtotal - totalDiscount) * taxRate;
+      const total = subtotal - totalDiscount + taxAmt + tipAmount;
+      const paidForCash =
+        paymentLines && paymentLines.length > 0
+          ? paidTotal
+          : paymentMethod === "CASH"
+            ? (amountTendered ?? total)
+            : 0;
+      if (
+        (paymentLines && paymentLines.length > 0 && paidTotal + 1e-7 < total) ||
+        (!paymentLines?.length && paymentMethod === "CASH" && paidForCash + 1e-7 < total)
+      ) {
+        throw new SaleInputError("Payment is less than the sale total");
+      }
+      const changeDue =
+        effectiveMethod === "CASH" || paymentLines?.some((line) => line.method === "CASH")
+          ? Math.max(0, paidForCash - total)
+          : undefined;
+
+      const created = await tx.sale.create({
+        data: {
+          userId: session.user.id,
+          receiptSeriesId: issued[0].id,
+          receiptNumber: issued[0].receiptNumber,
+          customerId: customerId || undefined,
+          subtotal,
+          taxRate,
+          taxAmount: taxAmt,
+          discountAmount: totalDiscount,
+          tipAmount,
+          total,
+          paymentMethod: effectiveMethod,
+          paymentLines: paymentLines && paymentLines.length > 0 ? paymentLines : undefined,
+          amountTendered:
+            amountTendered ??
+            (paymentMethod === "CASH" ? total : paidTotal > 0 ? paidTotal : undefined),
+          changeDue,
+          notes: note,
+          items: {
+            create: normalizedItems.map((item) => ({
+              productId: item.productId,
+              name: item.name,
+              price: item.price,
+              quantity: item.quantity,
+              unit: item.unit,
+              unitCost: item.unitCost,
+              total: item.price * item.quantity,
+              notes: item.notes,
+            })),
+          },
+        },
+        include: { items: true },
+      });
+
+      for (const item of normalizedItems) {
+        await tx.product.update({
+          where: { id: item.productId },
+          data: { stock: { decrement: item.quantity } },
+        });
+      }
+
+      if (customerId && loyaltySettings?.enabled) {
+        const earnedPoints = Math.floor(Math.max(0, total) * loyaltySettings.earnRate);
+        const logs: Array<{
+          customerId: string;
+          saleId: string;
+          delta: number;
+          type: "EARN" | "REDEEM" | "ADJUST";
+          note: string;
+        }> = [];
+
+        if (loyaltyPointsUsed > 0) {
+          await tx.customer.update({
+            where: { id: customerId },
+            data: { loyaltyPoints: { decrement: loyaltyPointsUsed } },
+          });
+          logs.push({
+            customerId,
+            saleId: created.id,
+            delta: -loyaltyPointsUsed,
+            type: "REDEEM",
+            note: `Redeemed ${loyaltyPointsUsed} pts`,
+          });
+        }
+        if (earnedPoints > 0) {
+          await tx.customer.update({
+            where: { id: customerId },
+            data: { loyaltyPoints: { increment: earnedPoints } },
+          });
+          logs.push({
+            customerId,
+            saleId: created.id,
+            delta: earnedPoints,
+            type: "EARN",
+            note: "Earned on sale",
+          });
+        }
+        for (const log of logs) await tx.loyaltyLog.create({ data: log });
+      }
+
+      return created;
     });
 
-    // Decrement stock
-    for (const item of items) {
-      await tx.product.update({
-        where: { id: item.productId },
-        data: { stock: { decrement: item.quantity } },
+    pluginRegistry
+      .fire("onSaleComplete", {
+        saleId: sale.id,
+        total: parseFloat(sale.total.toString()),
+        taxAmount: parseFloat(sale.taxAmount?.toString() ?? "0"),
+        tipAmount: parseFloat(sale.tipAmount?.toString() ?? "0"),
+        items: sale.items.map((item) => ({
+          productId: item.productId,
+          name: item.name,
+          quantity: parseFloat(item.quantity.toString()),
+          price: parseFloat(item.price.toString()),
+        })),
+        customerId: sale.customerId ?? null,
+        paymentMethod: sale.paymentMethod,
+        loyaltyPointsUsed,
+      })
+      .catch(() => {
+        /* handled inside fire() */
       });
+
+    return NextResponse.json({ sale }, { status: 201 });
+  } catch (error) {
+    if (error instanceof SaleInputError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
     }
-
-    // Loyalty points: deduct redeemed, award earned
-    if (customerId && loyaltySettings?.enabled) {
-      const earnedPoints = Math.floor(total * loyaltySettings.earnRate);
-      type LogEntry = { customerId: string; saleId: string; delta: number; type: "EARN" | "REDEEM" | "ADJUST"; note: string };
-      const logs: LogEntry[] = [];
-
-      if (loyaltyPointsUsed > 0) {
-        await tx.customer.update({
-          where: { id: customerId },
-          data: { loyaltyPoints: { decrement: loyaltyPointsUsed } },
-        });
-        logs.push({ customerId, saleId: created.id, delta: -loyaltyPointsUsed, type: "REDEEM" as const, note: `Redeemed ${loyaltyPointsUsed} pts` });
-      }
-      if (earnedPoints > 0) {
-        await tx.customer.update({
-          where: { id: customerId },
-          data: { loyaltyPoints: { increment: earnedPoints } },
-        });
-        logs.push({ customerId, saleId: created.id, delta: earnedPoints, type: "EARN" as const, note: `Earned on sale` });
-      }
-      for (const log of logs) {
-        await tx.loyaltyLog.create({ data: log });
-      }
+    if (error instanceof ReceiptSeriesUnavailableError) {
+      return NextResponse.json({ error: "Select an active receipt series" }, { status: 409 });
     }
-
-    return created;
-  });
-
-  // Fire plugin hook (non-blocking — errors are caught inside fire())
-  pluginRegistry.fire("onSaleComplete", {
-    saleId: sale.id,
-    total: parseFloat(sale.total.toString()),
-    taxAmount: parseFloat(sale.taxAmount?.toString() ?? "0"),
-    tipAmount: parseFloat(sale.tipAmount?.toString() ?? "0"),
-    items: sale.items.map((i: { productId: string | null; name: string; quantity: number; price: { toString(): string } }) => ({
-      productId: i.productId,
-      name: i.name,
-      quantity: i.quantity,
-      price: parseFloat(i.price.toString()),
-    })),
-    customerId: sale.customerId ?? null,
-    paymentMethod: sale.paymentMethod,
-    loyaltyPointsUsed: loyaltyPointsUsed || 0,
-  }).catch(() => {/* handled inside fire() */});
-
-  return NextResponse.json({ sale }, { status: 201 });
+    throw error;
+  }
 }

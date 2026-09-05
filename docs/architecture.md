@@ -51,7 +51,7 @@ izah-pos/
 ├── prisma/
 │   ├── schema.prisma
 │   ├── migrations/
-│   ├── seed.ts
+│   ├── seed-catalog.ts
 │   └── reset-db.ts
 ├── public/
 │   ├── manifest.json

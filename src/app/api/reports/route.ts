@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/db";
+import {
+  businessDateForInstant,
+  businessDayUtcRange,
+  isValidBusinessDate,
+  isValidTimeZone,
+  lastBusinessDateOfMonth,
+  shiftBusinessDate,
+} from "@/lib/daily-ledger";
 
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -12,34 +20,42 @@ export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const range = searchParams.get("range") ?? "today";
 
-  const now = new Date();
-  let start: Date;
-  const end = new Date(now);
-  end.setHours(23, 59, 59, 999);
+  const settings = await prisma.businessSettings.findUnique({
+    where: { id: "singleton" },
+    select: { businessTimezone: true },
+  });
+  const timeZone = isValidTimeZone(settings?.businessTimezone ?? "")
+    ? (settings?.businessTimezone ?? "Asia/Manila")
+    : "Asia/Manila";
+  const today = businessDateForInstant(new Date(), timeZone);
+  let fromDate = today;
+  let toDate = today;
 
   switch (range) {
     case "week":
-      start = new Date(now);
-      start.setDate(now.getDate() - 6);
-      start.setHours(0, 0, 0, 0);
+      fromDate = shiftBusinessDate(today, -6);
       break;
     case "month":
-      start = new Date(now.getFullYear(), now.getMonth(), 1);
-      start.setHours(0, 0, 0, 0);
+      fromDate = `${today.slice(0, 7)}-01`;
+      toDate = lastBusinessDateOfMonth(today);
       break;
     case "custom": {
       const from = searchParams.get("from");
       const to = searchParams.get("to");
-      start = from ? new Date(from) : new Date(now.setDate(now.getDate() - 30));
-      const customEnd = to ? new Date(to) : new Date();
-      customEnd.setHours(23, 59, 59, 999);
-      end.setTime(customEnd.getTime());
+      fromDate = from || shiftBusinessDate(today, -30);
+      toDate = to || today;
       break;
     }
     default: // today
-      start = new Date(now);
-      start.setHours(0, 0, 0, 0);
+      break;
   }
+
+  if (!isValidBusinessDate(fromDate) || !isValidBusinessDate(toDate) || fromDate > toDate) {
+    return NextResponse.json({ error: "Invalid report date range" }, { status: 400 });
+  }
+
+  const start = businessDayUtcRange(fromDate, timeZone).start;
+  const end = new Date(businessDayUtcRange(toDate, timeZone).endExclusive.getTime() - 1);
 
   const [sales, topProducts, voidedCount, refundSummary, lowStockProducts] = await Promise.all([
     prisma.sale.findMany({
@@ -59,7 +75,7 @@ export async function GET(req: NextRequest) {
             quantity: true,
             total: true,
             productId: true,
-            product: { select: { cost: true } },
+            unitCost: true,
           },
         },
         customer: { select: { id: true } },
@@ -81,13 +97,26 @@ export async function GET(req: NextRequest) {
     }),
     prisma.product.findMany({
       where: { active: true },
-      select: { id: true, name: true, stock: true, lowStockThreshold: true, sku: true, category: true },
+      select: {
+        id: true,
+        name: true,
+        stock: true,
+        lowStockThreshold: true,
+        sku: true,
+        category: true,
+      },
       orderBy: { stock: "asc" },
       take: 100,
     }),
   ]);
 
-  const lowStock = lowStockProducts.filter((p) => p.stock <= p.lowStockThreshold);
+  const lowStock = lowStockProducts
+    .filter((p) => p.stock.lessThanOrEqualTo(p.lowStockThreshold))
+    .map((p) => ({
+      ...p,
+      stock: parseFloat(p.stock.toString()),
+      lowStockThreshold: parseFloat(p.lowStockThreshold.toString()),
+    }));
 
   const byDay: Record<string, { revenue: number; transactions: number }> = {};
   let totalRevenue = 0;
@@ -97,7 +126,7 @@ export async function GET(req: NextRequest) {
   const uniqueCustomers = new Set<string>();
 
   for (const sale of sales) {
-    const day = sale.createdAt.toISOString().slice(0, 10);
+    const day = businessDateForInstant(sale.createdAt, timeZone);
     if (!byDay[day]) byDay[day] = { revenue: 0, transactions: 0 };
     const rev = parseFloat(sale.total.toString());
     byDay[day].revenue += rev;
@@ -108,8 +137,8 @@ export async function GET(req: NextRequest) {
 
     for (const item of sale.items) {
       const itemRevenue = parseFloat(item.total.toString());
-      const unitCost = item.product?.cost ? parseFloat(item.product.cost.toString()) : 0;
-      totalGrossProfit += itemRevenue - unitCost * item.quantity;
+      const unitCost = item.unitCost ? parseFloat(item.unitCost.toString()) : 0;
+      totalGrossProfit += itemRevenue - unitCost * parseFloat(item.quantity.toString());
     }
 
     const lines = sale.paymentLines as Array<{ method: string; amount: number }> | null;
@@ -146,7 +175,7 @@ export async function GET(req: NextRequest) {
     pieData,
     topProducts: topProducts.map((p) => ({
       name: p.name,
-      qty: p._sum.quantity ?? 0,
+      qty: parseFloat((p._sum.quantity ?? 0).toString()),
       revenue: parseFloat((p._sum.total ?? 0).toString()),
     })),
     lowStock,
