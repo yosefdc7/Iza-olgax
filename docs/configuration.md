@@ -35,7 +35,7 @@ Create a `.env` file in the project root (copy from `.env.example`).
 
 | Variable | Description | Example |
 |---|---|---|
-| `BETTER_AUTH_TRUSTED_ORIGINS` | Comma-separated list of additional trusted origins (for multi-IP / reverse proxy setups). In development, `localhost` variants are trusted automatically. | `https://pos.myshop.com,https://192.168.1.10:3000` |
+| `ALLOWED_ORIGINS` | Comma-separated list of allowed origins for CORS and reverse proxy setups. In development, `localhost` variants are permitted automatically. | `https://pos.myshop.com,https://192.168.1.10:3000` |
 | `DIRECT_URL` | Direct connection URL to PostgreSQL (only needed when using database poolers like PgBouncer for migrations). | `postgresql://user:pass@localhost:5432/izah_pos` |
 | `NODE_ENV` | Set to `production` in production deployments. | `production` |
 | `NEXT_STANDALONE` | Set to `1` to enable Next.js standalone output (required for Docker builds). | `1` |
@@ -58,7 +58,7 @@ DIRECT_URL="postgresql://postgres:STRONG_PASSWORD@db:5432/izah_pos"
 BETTER_AUTH_SECRET="replace_with_64_char_truly_random_secret"
 BETTER_AUTH_URL="https://pos.yourshop.com"
 NEXT_PUBLIC_APP_URL="https://pos.yourshop.com"
-BETTER_AUTH_TRUSTED_ORIGINS="https://pos.yourshop.com"
+ALLOWED_ORIGINS="https://pos.yourshop.com"
 NODE_ENV="production"
 NEXT_STANDALONE="1"
 ```
@@ -103,7 +103,7 @@ To access the POS from a tablet or other device on the same network:
 2. Add it to your `.env`:
    ```env
    BETTER_AUTH_URL="http://192.168.1.100:3000"
-   BETTER_AUTH_TRUSTED_ORIGINS="http://localhost:3000,http://192.168.1.100:3000"
+   ALLOWED_ORIGINS="http://localhost:3000,http://192.168.1.100:3000"
    ```
 3. In `next.config.ts`, add your IP to `allowedDevOrigins`:
    ```typescript
@@ -112,4 +112,4 @@ To access the POS from a tablet or other device on the same network:
 4. Restart the dev server.
 5. Open `http://192.168.1.100:3000` on any device on the same network.
 
-> In production with HTTPS and a proper domain name, this is handled automatically — you only need `BETTER_AUTH_URL` and `BETTER_AUTH_TRUSTED_ORIGINS` set to your domain.
+> In production with HTTPS and a proper domain name, this is handled automatically — you only need `BETTER_AUTH_URL` and `ALLOWED_ORIGINS` set to your domain.

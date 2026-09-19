@@ -47,9 +47,17 @@ async function probeDb(): Promise<{
 
 export async function GET(): Promise<NextResponse<SetupStatus>> {
   const missingEnv: string[] = [];
-  const hasDb = !!process.env.DATABASE_URL || !!(process.env as any).DB;
+  const hasDb =
+    !!process.env.DATABASE_URL ||
+    !!(process.env as any).DB ||
+    !!(process.env.SQL_HOST && process.env.SQL_USER);
   if (!hasDb) missingEnv.push("DATABASE_URL");
-  if (!process.env.BETTER_AUTH_SECRET) missingEnv.push("BETTER_AUTH_SECRET");
+
+  const hasSecret =
+    !!process.env.BETTER_AUTH_SECRET ||
+    !!process.env.AUTH_SECRET ||
+    !!process.env.NEXTAUTH_SECRET;
+  if (!hasSecret) missingEnv.push("AUTH_SECRET");
 
   const envOk = missingEnv.length === 0;
   if (!envOk) {

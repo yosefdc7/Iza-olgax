@@ -15,7 +15,7 @@ const nextConfig: NextConfig = {
       dynamic: 0,
     },
   },
-  ...(process.env.NEXT_STANDALONE === "1" ? { output: "standalone" } : {}),
+  output: "standalone",
   images: {
     remotePatterns: [
       { protocol: "https", hostname: "**" },

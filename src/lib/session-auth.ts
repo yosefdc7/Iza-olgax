@@ -1,28 +1,27 @@
 import crypto from "crypto";
 import { cookies } from "next/headers";
-import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { signToken } from "@/lib/auth";
 
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
 
 /**
- * Signs a session token with the Better Auth secret using HMAC SHA-256.
- */
-function signSessionToken(token: string, secret: string): string {
-  const signature = crypto.createHmac("sha256", secret).update(token).digest("base64");
-  return `${token}.${signature}`;
-}
-
-/**
- * Creates a valid Better Auth session for the given user ID,
- * signs the session token matching Better Auth convention,
- * and attaches the session cookies to the response.
+ * Creates a valid session for the given user ID,
+ * signs the session token, and attaches the session cookies to the response.
  */
 export async function createPosCashierSession(userId: string): Promise<string> {
-  const ctx = await (auth as unknown as { $context: Promise<{ internalAdapter: { createSession: (uid: string) => Promise<{ token: string; expiresAt: Date }> } }> }).$context;
-  const session = await ctx.internalAdapter.createSession(userId);
+  const rawToken = crypto.randomBytes(32).toString("hex");
+  const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
 
-  const secret = process.env.BETTER_AUTH_SECRET || "";
-  const signedToken = signSessionToken(session.token, secret);
+  const session = await prisma.session.create({
+    data: {
+      token: rawToken,
+      userId,
+      expiresAt,
+    },
+  });
+
+  const signedToken = signToken(session.token);
 
   const cookieStore = await cookies();
   const isSecure = process.env.NODE_ENV === "production";
@@ -34,6 +33,7 @@ export async function createPosCashierSession(userId: string): Promise<string> {
     path: "/",
   };
 
+  cookieStore.set("izah_session_token", signedToken, cookieOptions);
   cookieStore.set("better-auth.session_token", signedToken, cookieOptions);
   cookieStore.set("izah-setup-complete", "1", {
     httpOnly: true,

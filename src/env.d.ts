@@ -4,6 +4,7 @@ declare namespace NodeJS {
     DIRECT_URL?: string;
     BETTER_AUTH_SECRET?: string;
     BETTER_AUTH_URL?: string;
+    ALLOWED_ORIGINS?: string;
     NEXT_PUBLIC_APP_URL?: string;
     SUPABASE_URL?: string;
     SUPABASE_SERVICE_ROLE_KEY?: string;

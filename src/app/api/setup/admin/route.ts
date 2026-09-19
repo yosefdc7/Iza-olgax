@@ -42,10 +42,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
     const { auth } = await import("@/lib/auth");
 
-    // Use Better Auth's signUpEmail to handle password hashing
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Better Auth internal server API is dynamically typed based on plugins
-    const result = await (auth.api as any).signUpEmail({
-      body: { name, email, password },
+    const normalizedEmail = email.trim().toLowerCase();
+    const result = await auth.api.signUpEmail({
+      body: { name: name.trim(), email: normalizedEmail, password },
     });
 
     if (!result) {
@@ -55,14 +54,14 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Update the created user to ADMIN role and set optional PIN
     const { prisma } = await import("@/lib/db");
     await prisma.user.update({
-      where: { email },
+      where: { email: normalizedEmail },
       data: {
         role: "ADMIN",
         pin: pin && pin.trim() !== "" ? hashPin(pin.trim()) : null,
       },
     });
 
-    return NextResponse.json({ ok: true, email });
+    return NextResponse.json({ ok: true, email: normalizedEmail });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Failed to create admin";
     return NextResponse.json({ error: msg }, { status: 500 });
