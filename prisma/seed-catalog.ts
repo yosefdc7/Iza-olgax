@@ -21,9 +21,9 @@ async function main() {
       taxName: "Tax",
       receiptFooter: "Thank you for your purchase!",
       language: "en",
-      setupComplete: true,
+      setupComplete: false,
     },
-    update: { setupComplete: true },
+    update: {},
   });
 
   const products = [

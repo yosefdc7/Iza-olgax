@@ -6,10 +6,13 @@ Deliver the app-native Daily Sales Ledger and retain the zero-cost Netlify Free 
 
 ## Status
 
-Daily Sales Ledger implementation and second code-review checkpoint reached and locally verified. Latest local fixes are not deployed; hosted deployment remains live but production database authentication is still blocked by the Supabase password.
+Supabase database connection established and verified. 8th migration (`20260904150000_add_daily_sales_ledger`) applied to Supabase, and catalog seeded with 8 products. Local `.env` configured with Supabase PostgreSQL connection strings.
 
 ## Completed
 
+- Configured and validated Supabase PostgreSQL connection in `.env` (using transaction pooler on port 6543 and session pooler on port 5432).
+- Applied pending migration `20260904150000_add_daily_sales_ledger` to Supabase PostgreSQL database.
+- Seeded initial business settings and 8 catalog products via `prisma/seed-catalog.ts`.
 - Restored PostgreSQL Prisma/Better Auth runtime using `@prisma/adapter-pg` and `pg`.
 - Removed Cloudflare/OpenNext/D1 deployment path and legacy credential seed utilities.
 - Added credential-free `prisma/seed-catalog.ts`, Netlify configuration, Supabase Storage integration, and production migration guard.
@@ -110,14 +113,11 @@ VERIFIED:
 
 ## Next
 
-1. Reset or confirm the Supabase database password and update both Netlify pooler URLs privately.
-2. Apply the new ledger migration through the controlled migration step, then redeploy the current working tree using the documented Linux Docker path.
+1. Run `pnpm dev` locally and complete the first-run Admin setup wizard at `http://localhost:3000/setup`.
+2. Update Netlify environment variables `DATABASE_URL` and `DIRECT_URL` with the new working password so the hosted app at `https://izah-pos.netlify.app` syncs with Supabase.
 3. Configure at least one receipt series before checkout and smoke-test decimal products, concurrent numbering, admin/cashier ledger authorization, refunds, CSV, print, offline cache, and reload persistence.
-4. Recheck `/api/setup/status` and report live UAT separately from local source/build verification.
 
 ## Blockers / Unknowns
 
-- Production Netlify environment variables are present, but `DATABASE_URL`/`DIRECT_URL` authenticate with an invalid or unreplaced Supabase Postgres password. Reset it in Supabase Database Settings (requires Owner/Admin access) and update both variables without sharing the password in chat.
 - Supabase advisors report RLS disabled on all public application tables (including `_prisma_migrations`); this was not auto-enabled because adding RLS without app-specific policies would block access. Decide on policies before exposing Supabase’s anon API.
-- The new migration and authenticated browser flows were not run against production because database authentication is unresolved; live ledger UAT is therefore pending.
-- The latest local checkout/replay/export hardening changes have not been deployed; deployment remains intentionally user-controlled.
+- The latest local checkout/replay/export hardening changes have not been deployed to Netlify; deployment remains intentionally user-controlled.

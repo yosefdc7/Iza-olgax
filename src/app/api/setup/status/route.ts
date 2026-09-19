@@ -29,8 +29,8 @@ async function probeDb(): Promise<{
     });
 
     const initialized = !!settings;
-    const setupComplete = settings?.setupComplete === true;
     const hasAdmin = adminCount > 0;
+    const setupComplete = settings?.setupComplete === true && hasAdmin;
 
     return { connected: true, initialized, hasAdmin, setupComplete };
   } catch (err: any) {

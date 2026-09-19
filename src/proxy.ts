@@ -33,9 +33,10 @@ export function proxy(request: NextRequest) {
   const hasDb = !!process.env.DATABASE_URL || !!(process.env as any).DB;
   const hasAuthSecret = !!process.env.BETTER_AUTH_SECRET;
 
-  // If setup IS done and trying to access /setup, redirect to login/pos
+  // If setup IS done and trying to access /setup, redirect to login unless ?force=1
   const isSetupPath = pathname.startsWith("/setup") || pathname.startsWith("/api/setup");
-  if (setupDone && isSetupPath) {
+  const forceSetup = request.nextUrl.searchParams.get("force") === "1" || request.nextUrl.searchParams.get("force") === "true";
+  if (setupDone && isSetupPath && !forceSetup) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -49,12 +50,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/setup", request.url));
   }
 
-  // If authenticated user tries to access /login, redirect to /pos
-  if (hasSession && pathname === "/login") {
-    return NextResponse.redirect(new URL("/pos", request.url));
-  }
-
-  // Allow public paths (auth + setup wizard) - check this AFTER the redirect-if-logged-in check
+  // Allow public paths (auth + setup wizard)
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return NextResponse.next();
   }
