@@ -214,7 +214,7 @@ export function SettingsForm({ settings }: Props) {
       <section className="space-y-4">
         <h2 className="border-b pb-2 text-base font-semibold">Currency & Tax</h2>
         <div className="grid grid-cols-2 gap-4">
-          {field("Currency Symbol", "currency", { placeholder: "$" })}
+          {field("Currency Symbol", "currency", { placeholder: "₱" })}
           {field("Decimal Places", "currencyDecimals", { type: "number", min: "0", max: "4" })}
         </div>
         <div className="grid grid-cols-2 gap-4">

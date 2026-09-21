@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, ShoppingCart, Package, ReceiptText, BarChart3, Settings } from "lucide-react";
@@ -21,13 +21,28 @@ interface AppShellProps {
 
 export function AppShell({ user, cssVars, children }: AppShellProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const pathname = usePathname();
+
+  useEffect(() => {
+    try {
+      const qToken = new URLSearchParams(window.location.search).get("session_token");
+      const sToken = qToken || localStorage.getItem("izah_session_token");
+      if (sToken) setSessionToken(sToken);
+    } catch {}
+  }, []);
+
+  const buildHref = (path: string) => {
+    if (!sessionToken) return path;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}session_token=${encodeURIComponent(sessionToken)}`;
+  };
 
   const bottomNav = [
     { href: "/pos", label: "POS", icon: ShoppingCart, roles: ["ADMIN", "CASHIER"] },
-    { href: "/products", label: "Products", icon: Package, roles: ["ADMIN"] },
     { href: "/sales", label: "Sales", icon: ReceiptText, roles: ["ADMIN", "CASHIER"] },
-    { href: "/reports", label: "Reports", icon: BarChart3, roles: ["ADMIN", "CASHIER"] },
+    { href: "/products", label: "Products", icon: Package, roles: ["ADMIN"] },
+    { href: "/reports", label: "Reports", icon: BarChart3, roles: ["ADMIN"] },
     { href: "/settings", label: "Settings", icon: Settings, roles: ["ADMIN"] },
   ].filter((item) => item.roles.includes(user.role ?? "CASHIER"));
 
@@ -104,7 +119,7 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
           {bottomNav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
-              href={href}
+              href={buildHref(href)}
               prefetch={false}
               className={cn(
                 "flex flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",

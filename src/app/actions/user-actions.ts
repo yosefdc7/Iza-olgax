@@ -350,3 +350,165 @@ export async function verifyAndSwitchCashierPinAction(userId: string, pin: strin
     return { error: err instanceof Error ? err.message : "Failed to switch cashier" };
   }
 }
+
+/**
+ * Ensures a default Admin user and BusinessSettings exist so PIN login works out-of-the-box.
+ */
+async function ensureDefaultAdminAndSettings() {
+  try {
+    const userCount = await prisma.user.count();
+    if (userCount === 0) {
+      const defaultPinHash = hashPin("1234");
+      await prisma.user.create({
+        data: {
+          name: "Admin User",
+          email: "admin@example.com",
+          role: "ADMIN",
+          pin: defaultPinHash,
+        },
+      });
+    }
+
+    const settings = await prisma.businessSettings.findFirst();
+    if (!settings) {
+      await prisma.businessSettings.create({
+        data: {
+          id: "singleton",
+          name: "Izah POS Retail",
+          setupComplete: true,
+          currency: "₱",
+          currencyDecimals: 2,
+          taxRate: 8,
+          taxName: "Tax",
+          receiptFooter: "Thank you for shopping with us!",
+        },
+      });
+    }
+
+    const series = await prisma.receiptSeries.findFirst({ where: { active: true } });
+    if (!series) {
+      const anySeries = await prisma.receiptSeries.findFirst();
+      if (anySeries) {
+        await prisma.receiptSeries.update({
+          where: { id: anySeries.id },
+          data: { active: true },
+        });
+      } else {
+        await prisma.receiptSeries.create({
+          data: {
+            name: "DEFAULT",
+            nextNumber: 1,
+            active: true,
+          },
+        });
+      }
+    }
+  } catch (err) {
+    console.error("ensureDefaultAdminAndSettings error:", err);
+  }
+}
+
+/**
+ * Returns available staff members for the PIN login screen.
+ */
+export async function getStaffForPinLoginAction() {
+  try {
+    await ensureDefaultAdminAndSettings();
+
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        pin: true,
+      },
+      orderBy: [{ role: "asc" }, { name: "asc" }],
+    });
+
+    return {
+      users: users.map((u) => ({
+        id: u.id,
+        name: u.name || u.email,
+        email: u.email,
+        role: u.role,
+        hasPin: Boolean(u.pin),
+      })),
+    };
+  } catch (err) {
+    console.error("Get staff for PIN login error:", err);
+    return { users: [] };
+  }
+}
+
+/**
+ * Logs in a user using their 4-digit PIN.
+ * If userId is provided, validates that specific user.
+ * If userId is omitted, matches against any user whose PIN matches.
+ */
+export async function loginWithPinAction(pin: string, userId?: string) {
+  if (!isValidPinFormat(pin)) {
+    return { error: "PIN must be exactly 4 digits" };
+  }
+
+  try {
+    await ensureDefaultAdminAndSettings();
+
+    let matchedUser: { id: string; name: string; email: string; role: string } | null = null;
+
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { id: true, name: true, email: true, role: true, pin: true },
+      });
+
+      if (user && user.pin && verifyPin(pin, user.pin)) {
+        matchedUser = {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+        };
+      }
+    }
+
+    // Fallback: If no match for selected user or no userId provided, check all users
+    if (!matchedUser) {
+      const users = await prisma.user.findMany({
+        where: { pin: { not: null } },
+        select: { id: true, name: true, email: true, role: true, pin: true },
+      });
+
+      for (const user of users) {
+        if (user.pin && verifyPin(pin, user.pin)) {
+          matchedUser = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+          };
+          break;
+        }
+      }
+    }
+
+    if (!matchedUser) {
+      return { error: "Incorrect PIN. Please try again." };
+    }
+
+    const { signedToken } = await createPosCashierSession(matchedUser.id);
+
+    revalidatePath("/pos");
+    revalidatePath("/(app)", "layout");
+
+    return {
+      success: true,
+      token: signedToken,
+      user: matchedUser,
+      redirectTo: `/pos?session_token=${encodeURIComponent(signedToken)}`,
+    };
+  } catch (err) {
+    console.error("PIN login error:", err);
+    return { error: err instanceof Error ? err.message : "Failed to sign in with PIN" };
+  }
+}

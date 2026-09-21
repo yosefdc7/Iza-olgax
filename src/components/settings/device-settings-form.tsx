@@ -14,7 +14,7 @@ const DEMO_RECEIPT = {
   },
   settings: {
     name: "IZAH POS",
-    currency: "$",
+    currency: "₱",
     currencyDecimals: 2,
     taxName: "Tax",
     receiptFooter: "Thank you!",

@@ -8,7 +8,7 @@ function setAuthCookies(res: NextResponse, signedToken: string) {
   const cookieOptions = {
     httpOnly: true,
     secure: isSecure,
-    sameSite: "lax" as const,
+    sameSite: (isSecure ? "none" : "lax") as "none" | "lax",
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: "/",
   };
@@ -18,7 +18,7 @@ function setAuthCookies(res: NextResponse, signedToken: string) {
   res.cookies.set("izah-setup-complete", "1", {
     httpOnly: true,
     secure: isSecure,
-    sameSite: "lax" as const,
+    sameSite: (isSecure ? "none" : "lax") as "none" | "lax",
     maxAge: 31536000,
     path: "/",
   });
@@ -27,14 +27,17 @@ function setAuthCookies(res: NextResponse, signedToken: string) {
     res.cookies.set("__Secure-better-auth.session_token", signedToken, {
       ...cookieOptions,
       secure: true,
+      sameSite: "none",
     });
   }
 }
 
 function clearAuthCookies(res: NextResponse) {
+  const isSecure = process.env.NODE_ENV === "production";
   const clearOptions = {
     httpOnly: true,
-    sameSite: "lax" as const,
+    secure: isSecure,
+    sameSite: (isSecure ? "none" : "lax") as "none" | "lax",
     maxAge: 0,
     path: "/",
   };
@@ -43,6 +46,7 @@ function clearAuthCookies(res: NextResponse) {
   res.cookies.set("__Secure-better-auth.session_token", "", {
     ...clearOptions,
     secure: true,
+    sameSite: "none",
   });
 }
 

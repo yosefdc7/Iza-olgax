@@ -15,7 +15,7 @@ import {
   Loader2,
   LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { signOut } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
@@ -49,29 +49,40 @@ interface NavGroupDef {
   items: NavItemDef[];
 }
 
-const mainNavGroups: NavGroupDef[] = [
-  // Group 1: Store Operations (POS & Products)
+const cashierNavGroups: NavGroupDef[] = [
   {
-    id: "group-store-ops",
+    id: "group-cashier-ops",
     items: [
-      { href: "/pos", key: "pos", icon: ShoppingCart, roles: ["ADMIN", "CASHIER"] },
+      { href: "/pos", key: "pos", icon: ShoppingCart, roles: ["CASHIER", "ADMIN"] },
+      { href: "/sales", key: "sales", icon: ReceiptText, roles: ["CASHIER", "ADMIN"] },
+      { href: "/customers", key: "customers", icon: Users, roles: ["CASHIER", "ADMIN"] },
+    ],
+  },
+];
+
+const adminNavGroups: NavGroupDef[] = [
+  // Primary Analytics & Reports (PC #2 Main Focus)
+  {
+    id: "group-admin-reports",
+    items: [
+      { href: "/reports", key: "reports", icon: BarChart3, roles: ["ADMIN"] },
+      { href: "/sales", key: "sales", icon: ReceiptText, roles: ["ADMIN"] },
+    ],
+  },
+  // Store Catalog & Register
+  {
+    id: "group-admin-catalog",
+    items: [
       { href: "/products", key: "products", icon: Package, roles: ["ADMIN"] },
+      { href: "/pos", key: "pos", icon: ShoppingCart, roles: ["ADMIN"] },
     ],
   },
-  // Group 2: Directory & Partners (Suppliers & Customers)
+  // Directory & Partners
   {
-    id: "group-directory",
+    id: "group-admin-directory",
     items: [
+      { href: "/customers", key: "customers", icon: Users, roles: ["ADMIN"] },
       { href: "/suppliers", key: "suppliers", icon: Truck, roles: ["ADMIN"] },
-      { href: "/customers", key: "customers", icon: Users, roles: ["ADMIN", "CASHIER"] },
-    ],
-  },
-  // Group 3: Analytics & Finance (Sales & Reports)
-  {
-    id: "group-analytics",
-    items: [
-      { href: "/sales", key: "sales", icon: ReceiptText, roles: ["ADMIN", "CASHIER"] },
-      { href: "/reports", key: "reports", icon: BarChart3, roles: ["ADMIN", "CASHIER"] },
     ],
   },
 ];
@@ -90,23 +101,47 @@ export function AppSidebar({ user, onLinkClick }: AppSidebarProps) {
   const role = user.role ?? "CASHIER";
   const [isSigningOut, setIsSigningOut] = useState(false);
 
+  // Pick groups based on role
+  const groupsToDisplay = role === "ADMIN" ? adminNavGroups : cashierNavGroups;
+
   // Filter groups strictly based on the user's role
   const filterGroup = (group: NavGroupDef) => {
     const visibleItems = group.items.filter((item) => item.roles.includes(role));
     return visibleItems.length > 0 ? { ...group, items: visibleItems } : null;
   };
 
-  const visibleGroups = mainNavGroups
+  const visibleGroups = groupsToDisplay
     .map(filterGroup)
     .filter((g): g is NavGroupDef => g !== null);
 
   const visibleSettingsGroup = filterGroup(settingsNavGroup);
 
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const qToken = new URLSearchParams(window.location.search).get("session_token");
+      const sToken = qToken || localStorage.getItem("izah_session_token");
+      if (sToken) setSessionToken(sToken);
+    } catch {}
+  }, []);
+
+  const buildHref = (path: string) => {
+    if (!sessionToken) return path;
+    const sep = path.includes("?") ? "&" : "?";
+    return `${path}${sep}session_token=${encodeURIComponent(sessionToken)}`;
+  };
+
   const handleSignOut = async () => {
     setIsSigningOut(true);
     try {
+      if (typeof window !== "undefined") {
+        try {
+          localStorage.removeItem("izah_session_token");
+        } catch {}
+      }
       await signOut();
-      router.push("/login");
+      window.location.href = "/login?logout=1";
     } catch (error) {
       console.error("Sign out error:", error);
       setIsSigningOut(false);
@@ -114,7 +149,7 @@ export function AppSidebar({ user, onLinkClick }: AppSidebarProps) {
   };
 
   const handleProfileClick = () => {
-    router.push("/settings/profile");
+    router.push(buildHref("/settings/profile"));
     onLinkClick?.();
   };
 
@@ -153,7 +188,7 @@ export function AppSidebar({ user, onLinkClick }: AppSidebarProps) {
                 return (
                   <Link
                     key={href}
-                    href={href}
+                    href={buildHref(href)}
                     prefetch={false}
                     onClick={onLinkClick}
                     className={cn(
@@ -182,7 +217,7 @@ export function AppSidebar({ user, onLinkClick }: AppSidebarProps) {
               return (
                 <Link
                   key={href}
-                  href={href}
+                  href={buildHref(href)}
                   prefetch={false}
                   onClick={onLinkClick}
                   className={cn(

@@ -9,6 +9,10 @@ const nextConfig: NextConfig = {
     "localhost:3000",
     "127.0.0.1:3000",
     "192.168.8.186:3000",
+    "*.run.app",
+    "*.ai.studio",
+    "*.google.com",
+    "*.googleusercontent.com",
   ],
   experimental: {
     staleTimes: {

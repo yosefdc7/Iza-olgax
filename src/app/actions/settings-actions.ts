@@ -21,7 +21,7 @@ export async function updateSettings(formData: FormData) {
     logoUrl: (raw.logoUrl as string) || null,
     primaryColor: (raw.primaryColor as string) || "#18181b",
     accentColor: (raw.accentColor as string) || "#6366f1",
-    currency: (raw.currency as string) || "$",
+    currency: (raw.currency as string) || "₱",
     currencyDecimals: parseInt(raw.currencyDecimals as string, 10) || 2,
     taxRate: taxRatePercent / 100,
     taxName: (raw.taxName as string) || "Tax",

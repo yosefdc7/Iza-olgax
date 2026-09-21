@@ -9,7 +9,7 @@ const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7; // 7 days
  * Creates a valid session for the given user ID,
  * signs the session token, and attaches the session cookies to the response.
  */
-export async function createPosCashierSession(userId: string): Promise<string> {
+export async function createPosCashierSession(userId: string): Promise<{ token: string; signedToken: string }> {
   const rawToken = crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
 
@@ -24,31 +24,26 @@ export async function createPosCashierSession(userId: string): Promise<string> {
   const signedToken = signToken(session.token);
 
   const cookieStore = await cookies();
-  const isSecure = process.env.NODE_ENV === "production";
+  // In Cloud Run / AI Studio preview iframe, cookies MUST be SameSite=None and Secure
+  // so browsers do not reject them in cross-site iframe contexts.
   const cookieOptions = {
     httpOnly: true,
-    secure: isSecure,
-    sameSite: "lax" as const,
+    secure: true,
+    sameSite: "none" as const,
     maxAge: SESSION_MAX_AGE_SECONDS,
     path: "/",
   };
 
   cookieStore.set("izah_session_token", signedToken, cookieOptions);
   cookieStore.set("better-auth.session_token", signedToken, cookieOptions);
+  cookieStore.set("__Secure-better-auth.session_token", signedToken, cookieOptions);
   cookieStore.set("izah-setup-complete", "1", {
     httpOnly: true,
-    secure: isSecure,
-    sameSite: "lax" as const,
+    secure: true,
+    sameSite: "none" as const,
     maxAge: 31536000,
     path: "/",
   });
 
-  if (isSecure) {
-    cookieStore.set("__Secure-better-auth.session_token", signedToken, {
-      ...cookieOptions,
-      secure: true,
-    });
-  }
-
-  return session.token;
+  return { token: session.token, signedToken };
 }

@@ -322,7 +322,7 @@ export function PosLockOverlay({ isOpen, onUnlock }: PosLockOverlayProps) {
           <button
             onClick={() => {
               signOut();
-              router.push("/login");
+              window.location.href = "/login?logout=1";
             }}
             className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors font-medium"
           >

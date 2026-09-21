@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 import { useCartStore, PaymentMethod } from "@/store/cart";
 import { formatCurrency } from "@/lib/utils";
@@ -87,6 +88,18 @@ export function PaymentPanel({
     Array<{ id: string; name: string; nextNumber: number }>
   >([]);
   const [receiptSeriesId, setReceiptSeriesId] = useState("");
+  const [settingsHref, setSettingsHref] = useState("/settings#receipt-series-settings");
+
+  useEffect(() => {
+    try {
+      const token =
+        new URLSearchParams(window.location.search).get("session_token") ||
+        localStorage.getItem("izah_session_token");
+      if (token) {
+        setSettingsHref(`/settings?session_token=${encodeURIComponent(token)}#receipt-series-settings`);
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     fetch("/api/receipt-series")
@@ -287,9 +300,18 @@ export function PaymentPanel({
   return (
     <div className="space-y-3 border-t p-4">
       <div className="space-y-1">
-        <label htmlFor="receipt-series" className="text-muted-foreground text-xs font-medium">
-          Receipt series
-        </label>
+        <div className="flex items-center justify-between">
+          <label htmlFor="receipt-series" className="text-muted-foreground text-xs font-medium">
+            Receipt series
+          </label>
+          <Link
+            href={settingsHref}
+            className="text-[11px] text-primary hover:underline"
+            title="Configure receipt series in Settings"
+          >
+            Manage series
+          </Link>
+        </div>
         <select
           id="receipt-series"
           value={receiptSeriesId}
@@ -303,6 +325,17 @@ export function PaymentPanel({
             </option>
           ))}
         </select>
+        {receiptSeries.length === 0 && (
+          <div className="mt-1 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+            <p className="font-semibold">An active receipt series is required.</p>
+            <p className="mt-0.5 text-[11px]">
+              Ask an administrator to configure one in{" "}
+              <Link href={settingsHref} className="font-bold underline hover:text-primary">
+                Settings &rarr;
+              </Link>
+            </p>
+          </div>
+        )}
       </div>
       {/* Hold / Recall row */}
       <div className="flex gap-2">
@@ -460,7 +493,7 @@ export function PaymentPanel({
             )}
           </div>
           <p className="text-muted-foreground text-[10px]">
-            {loyaltyInfo.earnRate} pt per $1 Â· {loyaltyInfo.redeemValue} pts = $1 off
+            {loyaltyInfo.earnRate} pt per ₱1 · {loyaltyInfo.redeemValue} pts = ₱1 off
           </p>
         </div>
       )}
@@ -716,7 +749,21 @@ export function PaymentPanel({
         </div>
       )}
 
-      {error && <p className="text-destructive text-xs">{error}</p>}
+      {error && (
+        <div className="rounded-md border border-destructive/25 bg-destructive/10 p-2.5 text-xs text-destructive">
+          <p>{error}</p>
+          {(error.includes("Settings") || error.toLowerCase().includes("receipt series")) && (
+            <div className="mt-1.5 pt-1 border-t border-destructive/20">
+              <Link
+                href={settingsHref}
+                className="font-semibold underline hover:text-foreground inline-flex items-center gap-1"
+              >
+                Go to Settings to configure a series &rarr;
+              </Link>
+            </div>
+          )}
+        </div>
+      )}
       {queuedMessage && <p className="text-xs text-green-600">{queuedMessage}</p>}
 
       {/* Complete sale */}

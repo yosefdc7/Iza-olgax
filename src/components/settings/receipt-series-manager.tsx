@@ -44,7 +44,7 @@ export function ReceiptSeriesManager() {
   }
 
   return (
-    <section className="space-y-4">
+    <section id="receipt-series-settings" className="space-y-4 scroll-mt-6">
       <div>
         <h2 className="text-base font-semibold">Receipt Series</h2>
         <p className="text-muted-foreground text-sm">

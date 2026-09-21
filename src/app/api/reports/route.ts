@@ -178,6 +178,13 @@ export async function GET(req: NextRequest) {
       qty: parseFloat((p._sum.quantity ?? 0).toString()),
       revenue: parseFloat((p._sum.total ?? 0).toString()),
     })),
-    lowStock,
+    recentSales: sales.slice(-10).reverse().map((s) => ({
+      id: s.id,
+      total: parseFloat(s.total.toString()),
+      paymentMethod: s.paymentMethod,
+      createdAt: s.createdAt,
+      itemCount: s.items.reduce((acc, it) => acc + parseFloat(it.quantity.toString()), 0),
+    })),
+    lastUpdated: new Date().toISOString(),
   });
 }

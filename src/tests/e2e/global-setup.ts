@@ -15,7 +15,7 @@ export default async function globalSetup(_config: FullConfig) {
   // Hit the status endpoint – it sets the setup-complete cookie if the DB
   // says setup is done.  We use a real browser context so cookies are
   // persisted properly.
-  const browser = await chromium.launch({ channel: "chrome" });
+  const browser = await chromium.launch();
   const context = await browser.newContext();
 
   // Directly inject the setup cookie without SameSite restriction so it's

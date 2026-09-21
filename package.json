@@ -9,7 +9,7 @@
     "lint": "eslint src prisma",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "postinstall": "rm -rf src/generated/prisma && prisma generate || true",
+    "postinstall": "prisma generate || exit 0",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:e2e": "playwright test",

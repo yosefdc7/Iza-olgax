@@ -8,8 +8,8 @@ export function DarkModeToggle() {
 
   useEffect(() => {
     const stored = localStorage.getItem("izah-theme");
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const isDark = stored ? stored === "dark" : prefersDark;
+    // Default to light mode unless explicitly set to "dark" in localStorage
+    const isDark = stored === "dark";
     setDark(isDark);
     document.documentElement.classList.toggle("dark", isDark);
   }, []);

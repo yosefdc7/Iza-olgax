@@ -4,30 +4,60 @@ import type { NextRequest } from "next/server";
 // Middleware runs in Edge runtime.
 // Auth cookie presence is checked; full session validation happen in Server Components.
 
-const PUBLIC_PATHS = ["/login", "/api/auth", "/setup", "/api/setup", "/api/ping"];
+const PUBLIC_PATHS = ["/login", "/api/auth", "/api/ping"];
 
-function getAllowedOrigins(request: NextRequest): Set<string> {
-  const allowed = new Set<string>();
+function isOriginAllowed(origin: string | null, request: NextRequest): boolean {
+  if (!origin) return true; // Direct same-origin or non-browser request
 
-  // Always allow current request's own origin (same-origin)
-  if (request.nextUrl.origin) {
-    allowed.add(request.nextUrl.origin);
+  // Check request's own origin
+  if (request.nextUrl.origin && request.nextUrl.origin === origin) {
+    return true;
   }
 
+  // Check against forwarded headers from reverse proxy (Cloud Run nginx)
+  const forwardedHost = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (forwardedHost) {
+    const rawHost = forwardedHost.split(":")[0];
+    try {
+      const originUrl = new URL(origin);
+      if (originUrl.hostname === rawHost || originUrl.host === forwardedHost) {
+        return true;
+      }
+    } catch {
+      // ignore parsing failure
+    }
+  }
+
+  // Check configured origins
   const envOrigins = process.env.ALLOWED_ORIGINS;
   if (envOrigins) {
-    envOrigins
-      .split(",")
-      .map((o) => o.trim())
-      .filter(Boolean)
-      .forEach((o) => allowed.add(o));
-  } else if (process.env.NODE_ENV !== "production") {
-    // Default in non-production: permit standard local development origins
-    allowed.add("http://localhost:3000");
-    allowed.add("http://127.0.0.1:3000");
+    const list = envOrigins.split(",").map((o) => o.trim()).filter(Boolean);
+    if (list.includes(origin)) return true;
   }
 
-  return allowed;
+  try {
+    const originUrl = new URL(origin);
+    const hostname = originUrl.hostname.toLowerCase();
+
+    // Permit Cloud Run domains, AI Studio environments, and local development
+    if (
+      hostname === "ai.studio" ||
+      hostname.endsWith(".ai.studio") ||
+      hostname.endsWith(".run.app") ||
+      hostname.endsWith(".google.com") ||
+      hostname.endsWith(".googleusercontent.com") ||
+      hostname.endsWith(".web.app") ||
+      hostname.endsWith(".firebaseapp.com") ||
+      hostname === "localhost" ||
+      hostname === "127.0.0.1"
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  return false;
 }
 
 function applyCorsHeaders(response: NextResponse, origin: string | null, isAllowed: boolean): NextResponse {
@@ -42,8 +72,7 @@ function applyCorsHeaders(response: NextResponse, origin: string | null, isAllow
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const origin = request.headers.get("origin");
-  const allowedOrigins = getAllowedOrigins(request);
-  const isAllowedOrigin = origin ? allowedOrigins.has(origin) : true;
+  const isAllowedOrigin = isOriginAllowed(origin, request);
 
   // Handle CORS preflight (OPTIONS)
   if (request.method === "OPTIONS") {
@@ -82,47 +111,108 @@ export function proxy(request: NextRequest) {
     return applyCorsHeaders(NextResponse.next(), origin, isAllowedOrigin);
   }
 
-  // Check auth via session cookie – no DB round-trip needed in Edge runtime.
-  const hasSession =
-    !!request.cookies.get("izah_session_token")?.value ||
-    !!request.cookies.get("better-auth.session_token")?.value ||
-    !!request.cookies.get("__Secure-better-auth.session_token")?.value;
+  // Check auth via session cookie, query parameter, or custom headers
+  // (essential for cross-site iframes where 3rd-party cookies may be partitioned or blocked)
+  const tokenFromQuery =
+    request.nextUrl.searchParams.get("session_token") ||
+    request.nextUrl.searchParams.get("token");
 
-  // Check setup completion via cookie (set by /api/setup/complete) or existing session
-  const setupDone = request.cookies.get("izah-setup-complete")?.value === "1" || hasSession;
-  const hasDb = !!process.env.DATABASE_URL || !!(process.env as any).DB;
-  const hasAuthSecret = true; // Native auth uses fallback secret if not explicitly provided
+  const cookieToken =
+    request.cookies.get("izah_session_token")?.value ||
+    request.cookies.get("better-auth.session_token")?.value ||
+    request.cookies.get("__Secure-better-auth.session_token")?.value;
 
-  // If setup IS done and trying to access /setup, redirect to login unless ?force=1
-  const isSetupPath = pathname.startsWith("/setup") || pathname.startsWith("/api/setup");
-  const forceSetup = request.nextUrl.searchParams.get("force") === "1" || request.nextUrl.searchParams.get("force") === "true";
-  if (setupDone && isSetupPath && !forceSetup) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  const authHeader = request.headers.get("authorization") || "";
+  const headerToken =
+    request.headers.get("x-session-token") ||
+    request.headers.get("izah-session-token") ||
+    (authHeader.startsWith("Bearer ") ? authHeader.slice(7).trim() : null);
+
+  const activeToken = tokenFromQuery || headerToken || cookieToken;
+  const hasSession = !!activeToken;
+
+  // Setup is removed: if user tries to access /setup, redirect to /login or /pos
+  if (pathname.startsWith("/setup") || pathname.startsWith("/api/setup")) {
+    const dest = hasSession ? (activeToken ? `/pos?session_token=${encodeURIComponent(activeToken)}` : "/pos") : "/login";
+    return NextResponse.redirect(new URL(dest, request.url));
   }
 
-  // Auth routes must always be accessible (Better Auth sign-in/out/session)
-  if (pathname.startsWith("/api/auth")) {
-    return applyCorsHeaders(NextResponse.next(), origin, isAllowedOrigin);
+  // All API routes must proceed to route handlers rather than being redirected to /login with HTML
+  if (pathname.startsWith("/api/")) {
+    const requestHeaders = new Headers(request.headers);
+    if (activeToken) {
+      const existingCookie = requestHeaders.get("cookie") || "";
+      if (!existingCookie.includes("izah_session_token")) {
+        requestHeaders.set(
+          "cookie",
+          `${existingCookie ? existingCookie + "; " : ""}izah_session_token=${activeToken}; better-auth.session_token=${activeToken}`
+        );
+      }
+      requestHeaders.set("x-session-token", activeToken);
+      requestHeaders.set("authorization", `Bearer ${activeToken}`);
+    }
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    return applyCorsHeaders(response, origin, isAllowedOrigin);
   }
 
-  // If setup NOT done, redirect to setup (unless already there), but allow other API routes if needed
-  if ((!setupDone || !hasDb || !hasAuthSecret) && !isSetupPath) {
-    return NextResponse.redirect(new URL("/setup", request.url));
+  // If already authenticated and trying to access /login, redirect straight to /pos
+  if (hasSession && pathname === "/login" && !request.nextUrl.searchParams.has("force") && !request.nextUrl.searchParams.has("logout")) {
+    const dest = activeToken ? `/pos?session_token=${encodeURIComponent(activeToken)}` : "/pos";
+    return NextResponse.redirect(new URL(dest, request.url));
   }
 
-  // Allow public paths (auth + setup wizard)
+  // Allow public paths (e.g. /login, /api/ping)
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
     return applyCorsHeaders(NextResponse.next(), origin, isAllowedOrigin);
   }
 
-  // If not authenticated and trying to access protected route, redirect to login
+  // If not authenticated and trying to access protected route, redirect to /login
   if (!hasSession) {
-    const url = new URL("/login", request.url);
-    // Optional: add ?callbackUrl=... if needed, but for POS simple redirect is fine
-    return NextResponse.redirect(url);
+    const loginUrl = new URL("/login", request.url);
+    if (pathname && pathname !== "/" && pathname !== "/pos") {
+      loginUrl.searchParams.set("redirect", pathname);
+    }
+    return NextResponse.redirect(loginUrl);
   }
 
-  return applyCorsHeaders(NextResponse.next(), origin, isAllowedOrigin);
+  // Prepare response. Forward active token in request headers and set cookies
+  const requestHeaders = new Headers(request.headers);
+  if (activeToken) {
+    const existingCookie = requestHeaders.get("cookie") || "";
+    if (!existingCookie.includes("izah_session_token")) {
+      requestHeaders.set(
+        "cookie",
+        `${existingCookie ? existingCookie + "; " : ""}izah_session_token=${activeToken}; better-auth.session_token=${activeToken}`
+      );
+    }
+    requestHeaders.set("x-session-token", activeToken);
+    requestHeaders.set("authorization", `Bearer ${activeToken}`);
+  }
+
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
+
+  if (activeToken) {
+    const cookieOpts = {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none" as const,
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7,
+    };
+    response.cookies.set("izah_session_token", activeToken, cookieOpts);
+    response.cookies.set("better-auth.session_token", activeToken, cookieOpts);
+    response.cookies.set("__Secure-better-auth.session_token", activeToken, cookieOpts);
+  }
+
+  return applyCorsHeaders(response, origin, isAllowedOrigin);
 }
 
 export const config = {

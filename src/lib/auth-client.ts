@@ -9,8 +9,23 @@ export interface SignInEmailParams {
 }
 
 export interface SignInResult {
-  data: { user: AuthUser; session: Session } | null;
+  data: { user: AuthUser; session: Session; token?: string } | null;
   error: { message: string; code?: string; status?: number } | null;
+}
+
+export function getStoredSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const qToken = urlParams.get("session_token") || urlParams.get("token");
+    if (qToken) {
+      localStorage.setItem("izah_session_token", qToken);
+      return qToken;
+    }
+    return localStorage.getItem("izah_session_token");
+  } catch {
+    return null;
+  }
 }
 
 export const signIn = {
@@ -35,10 +50,19 @@ export const signIn = {
         };
       }
 
+      if (typeof window !== "undefined" && json.token) {
+        try {
+          localStorage.setItem("izah_session_token", json.token);
+          document.cookie = `izah_session_token=${json.token}; Path=/; Max-Age=604800; SameSite=None; Secure`;
+          document.cookie = `better-auth.session_token=${json.token}; Path=/; Max-Age=604800; SameSite=None; Secure`;
+        } catch {}
+      }
+
       return {
         data: {
           user: json.user,
           session: json.session,
+          token: json.token,
         },
         error: null,
       };
@@ -57,6 +81,13 @@ export const signIn = {
 
 export async function signOut(): Promise<void> {
   try {
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.removeItem("izah_session_token");
+        document.cookie = "izah_session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=None; Secure";
+        document.cookie = "better-auth.session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; SameSite=None; Secure";
+      } catch {}
+    }
     await fetch("/api/auth/sign-out", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -68,7 +99,19 @@ export async function signOut(): Promise<void> {
 
 export async function getSession(): Promise<{ data: SessionResult | null; error: Error | null }> {
   try {
-    const res = await fetch("/api/auth/get-session", { cache: "no-store" });
+    const token = getStoredSessionToken();
+    const reqHeaders: Record<string, string> = {};
+    if (token) {
+      reqHeaders["x-session-token"] = token;
+      reqHeaders["izah-session-token"] = token;
+      reqHeaders["Authorization"] = `Bearer ${token}`;
+    }
+
+    const res = await fetch("/api/auth/get-session", {
+      cache: "no-store",
+      headers: reqHeaders,
+      credentials: "include",
+    });
     if (!res.ok) return { data: null, error: new Error(`Status ${res.status}`) };
     const data = await res.json();
     return { data: data || null, error: null };
@@ -84,7 +127,19 @@ export function useSession() {
 
   const fetchSession = useCallback(async () => {
     try {
-      const res = await fetch("/api/auth/get-session", { cache: "no-store" });
+      const token = getStoredSessionToken();
+      const reqHeaders: Record<string, string> = {};
+      if (token) {
+        reqHeaders["x-session-token"] = token;
+        reqHeaders["izah-session-token"] = token;
+        reqHeaders["Authorization"] = `Bearer ${token}`;
+      }
+
+      const res = await fetch("/api/auth/get-session", {
+        cache: "no-store",
+        headers: reqHeaders,
+        credentials: "include",
+      });
       if (res.ok) {
         const json = await res.json();
         setData(json || null);

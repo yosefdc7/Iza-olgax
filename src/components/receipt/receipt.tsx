@@ -38,7 +38,7 @@ interface ReceiptProps {
   settings: ReceiptSettings;
 }
 
-function fmt(amount: number, currency = "$", decimals = 2) {
+function fmt(amount: number, currency = "₱", decimals = 2) {
   return `${currency}${amount.toFixed(decimals)}`;
 }
 

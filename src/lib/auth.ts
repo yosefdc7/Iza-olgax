@@ -77,6 +77,36 @@ function parseCookies(headerValue: string | undefined | null): Record<string, st
 function extractTokenFromHeaders(
   headersObj: Headers | Record<string, string | string[] | undefined>
 ): string | null {
+  // 1. Check direct session token headers (useful for reverse-proxies and iframe handoffs)
+  let authHeader = "";
+  let xSessionToken = "";
+  if (typeof (headersObj as Headers)?.get === "function") {
+    authHeader = (headersObj as Headers).get("authorization") || "";
+    xSessionToken =
+      (headersObj as Headers).get("x-session-token") ||
+      (headersObj as Headers).get("izah-session-token") ||
+      "";
+  } else {
+    const rawAuth = (headersObj as Record<string, unknown>)["authorization"];
+    authHeader = typeof rawAuth === "string" ? rawAuth : "";
+    const rawX =
+      (headersObj as Record<string, unknown>)["x-session-token"] ||
+      (headersObj as Record<string, unknown>)["izah-session-token"];
+    xSessionToken = typeof rawX === "string" ? rawX : "";
+  }
+
+  if (authHeader.startsWith("Bearer ")) {
+    const raw = authHeader.slice(7).trim();
+    const token = verifyAndExtractToken(raw) || raw.split(".")[0];
+    if (token) return token;
+  }
+
+  if (xSessionToken) {
+    const token = verifyAndExtractToken(xSessionToken) || xSessionToken.split(".")[0];
+    if (token) return token;
+  }
+
+  // 2. Check cookies
   let cookieHeader = "";
   if (typeof (headersObj as Headers)?.get === "function") {
     cookieHeader = (headersObj as Headers).get("cookie") || "";

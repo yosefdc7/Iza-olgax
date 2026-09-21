@@ -12,10 +12,32 @@ const createSchema = z.object({
 export async function GET() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const series = await prisma.receiptSeries.findMany({
+  let series = await prisma.receiptSeries.findMany({
     where: session.user.role === "ADMIN" ? undefined : { active: true },
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });
+
+  // Ensure an active series exists so the POS register is immediately functional
+  if (series.length === 0) {
+    const existing = await prisma.receiptSeries.findFirst();
+    if (existing) {
+      const activated = await prisma.receiptSeries.update({
+        where: { id: existing.id },
+        data: { active: true },
+      });
+      series = [activated];
+    } else {
+      const created = await prisma.receiptSeries.create({
+        data: {
+          name: "DEFAULT",
+          nextNumber: 1,
+          active: true,
+        },
+      });
+      series = [created];
+    }
+  }
+
   return NextResponse.json({ series });
 }
 

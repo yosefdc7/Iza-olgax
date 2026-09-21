@@ -32,7 +32,7 @@ interface ReceiptSettings {
 const FALLBACK_SETTINGS: ReceiptSettings = {
   name: "My Store",
   logoUrl: null,
-  currency: "$",
+  currency: "₱",
   currencyDecimals: 2,
   taxName: "Tax",
   receiptFooter: "",

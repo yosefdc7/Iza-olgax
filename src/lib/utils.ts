@@ -12,20 +12,21 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function formatCurrency(
   amount: number | string,
-  symbol = "$",
+  symbol = "₱",
   decimals = 2,
   locale = "en"
 ): string {
+  const sym = symbol || "₱";
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (isNaN(num)) return `${symbol}0.${"0".repeat(decimals)}`;
+  if (isNaN(num)) return `${sym}0.${"0".repeat(decimals)}`;
   try {
     const formatted = new Intl.NumberFormat(locale, {
       minimumFractionDigits: decimals,
       maximumFractionDigits: decimals,
     }).format(num);
-    return `${symbol}${formatted}`;
+    return `${sym}${formatted}`;
   } catch {
-    return `${symbol}${num.toFixed(decimals)}`;
+    return `${sym}${num.toFixed(decimals)}`;
   }
 }
 

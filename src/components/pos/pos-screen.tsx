@@ -34,7 +34,7 @@ const DEFAULT_TAX_RATE = 0;
 const DEFAULT_RECEIPT_SETTINGS: ReceiptSettings = {
   name: "My Shop",
   logoUrl: null,
-  currency: "$",
+  currency: "₱",
   currencyDecimals: 2,
   taxName: "Tax",
   receiptFooter: "Thank you for your business!",

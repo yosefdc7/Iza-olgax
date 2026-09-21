@@ -51,10 +51,73 @@ export default async function RootLayout({
       <body
         className={`${GeistSans.variable} ${GeistMono.variable} antialiased`}
       >
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              try {
+                var theme = localStorage.getItem('izah-theme');
+                if (theme === 'dark') {
+                  document.documentElement.classList.add('dark');
+                } else {
+                  document.documentElement.classList.remove('dark');
+                }
+              } catch(e) {}
+            `,
+          }}
+        />
         <NextIntlClientProvider messages={messages}>
           {children}
           <Toaster richColors toastOptions={{ className: "text-sm" }} />
         </NextIntlClientProvider>
+        {/* Client Session Bridge: preserves session token across cross-site iframes and attaches auth headers to all fetch/RSC calls */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              (function() {
+                try {
+                  var params = new URLSearchParams(window.location.search);
+                  if (params.has('logout') || params.has('force')) {
+                    try { localStorage.removeItem('izah_session_token'); } catch(e) {}
+                  } else {
+                    var queryToken = params.get('session_token') || params.get('token');
+                    if (queryToken) {
+                      try { localStorage.setItem('izah_session_token', queryToken); } catch(e) {}
+                    }
+                  }
+                  var token = (params.get('session_token') || params.get('token') || (function() {
+                    try { return localStorage.getItem('izah_session_token'); } catch(e) { return null; }
+                  })());
+
+                  if (token && !params.has('logout')) {
+                    try {
+                      document.cookie = 'izah_session_token=' + encodeURIComponent(token) + '; Path=/; Max-Age=604800; SameSite=None; Secure';
+                      document.cookie = 'better-auth.session_token=' + encodeURIComponent(token) + '; Path=/; Max-Age=604800; SameSite=None; Secure';
+                    } catch(e) {}
+                  }
+
+                  // Patch window.fetch so every client request and Next.js RSC page navigation automatically sends auth headers
+                  var originalFetch = window.fetch;
+                  window.fetch = function(input, init) {
+                    init = init || {};
+                    var curToken = null;
+                    try { curToken = localStorage.getItem('izah_session_token'); } catch(e) {}
+                    if (curToken) {
+                      var h = new Headers(init.headers || {});
+                      if (!h.has('x-session-token')) h.set('x-session-token', curToken);
+                      if (!h.has('izah-session-token')) h.set('izah-session-token', curToken);
+                      if (!h.has('authorization')) h.set('authorization', 'Bearer ' + curToken);
+                      init.headers = h;
+                    }
+                    if (!init.credentials) init.credentials = 'include';
+                    return originalFetch.call(this, input, init);
+                  };
+                } catch(err) {
+                  console.warn('Session bridge init error:', err);
+                }
+              })();
+            `,
+          }}
+        />
         {/* Register service worker for PWA offline support */}
         <script
           dangerouslySetInnerHTML={{
