@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod";
 
 export const productFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
@@ -19,3 +19,16 @@ export const productFormSchema = z.object({
 });
 
 export type ProductFormValues = z.infer<typeof productFormSchema>;
+
+export const packagingFormSchema = z.object({
+  id: z.string().optional(),
+  name: z.string().min(1, "Packaging name is required").max(100),
+  conversionQty: z.coerce
+    .number()
+    .int("Must be a whole number")
+    .min(2, "Must be at least 2 base units per packaging"),
+  price: z.coerce.number().min(0, "Price must be non-negative"),
+  barcode: z.string().max(100).optional().nullable(),
+});
+
+export type PackagingFormValues = z.infer<typeof packagingFormSchema>;

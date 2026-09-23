@@ -14,6 +14,13 @@ export interface CartItem {
   stock: number;
   unit: string;
   quantityPrecision: number;
+  // ── Packaging fields (optional) ──────────────────────────────────────────
+  /** ID of the selected ProductPackaging row. Absent = base unit. */
+  packagingId?: string;
+  /** Human-readable packaging name, e.g. "Box of 100" */
+  packagingName?: string;
+  /** How many base units this packaging represents (conversionQty snapshot). */
+  packagingQty?: number;
 }
 
 /** One line in a split-tender payment */
@@ -83,14 +90,24 @@ export const useCartStore = create<CartState>()(
 
       addItem: (item) =>
         set((state) => {
-          const existing = state.items.find((i) => i.productId === item.productId);
+          // Cart key: productId::packagingId or productId::base
+          const key = item.packagingId
+            ? `${item.productId}::${item.packagingId}`
+            : `${item.productId}::base`;
+          const existing = state.items.find((i) => {
+            const iKey = i.packagingId
+              ? `${i.productId}::${i.packagingId}`
+              : `${i.productId}::base`;
+            return iKey === key;
+          });
           if (existing) {
             return {
-              items: state.items.map((i) =>
-                i.productId === item.productId
-                  ? { ...i, quantity: i.quantity + 1 }
-                  : i
-              ),
+              items: state.items.map((i) => {
+                const iKey = i.packagingId
+                  ? `${i.productId}::${i.packagingId}`
+                  : `${i.productId}::base`;
+                return iKey === key ? { ...i, quantity: i.quantity + 1 } : i;
+              }),
             };
           }
           return { items: [...state.items, { ...item, quantity: 1, notes: "" }] };

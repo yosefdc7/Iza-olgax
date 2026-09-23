@@ -121,7 +121,29 @@ model Product {
   saleItems        SaleItem[]
   stockAdjustments StockAdjustment[]
   supplier         Supplier?         @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  packagings       ProductPackaging[]
 }
+
+// ============================================================
+// Product Packaging (optional; products without packagings work as before)
+// ============================================================
+
+model ProductPackaging {
+  id            String   @id @default(cuid())
+  productId     String
+  name          String
+  /// Number of base units per 1 packaging unit (e.g. 100 for a box of 100 nails).
+  conversionQty Decimal  @db.Decimal(14, 4)
+  /// Independent sell price — not derived from base product price.
+  price         Decimal
+  barcode       String?  @unique
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product   Product    @relation(fields: [productId], references: [id], onDelete: Cascade)
+  saleItems SaleItem[]
+}
+
 
 // ============================================================
 // Customer
@@ -166,6 +188,7 @@ model Sale {
   backfilled      Boolean       @default(false)
   voidReason      String?
   notes           String?
+  drSiNumber      String?
   createdAt       DateTime      @default(now())
 
   user          User           @relation(fields: [userId], references: [id])
@@ -190,19 +213,25 @@ model ReceiptSeries {
 }
 
 model SaleItem {
-  id        String   @id @default(cuid())
-  saleId    String
-  productId String?
-  name      String
-  price     Decimal
-  quantity  Decimal  @db.Decimal(14, 4)
-  unit      String   @default("pc")
-  unitCost  Decimal? @db.Decimal(14, 4)
-  total     Decimal
-  notes     String?
+  id           String   @id @default(cuid())
+  saleId       String
+  productId    String?
+  name         String
+  price        Decimal
+  basePrice    Decimal? @db.Decimal(14, 4)
+  quantity     Decimal  @db.Decimal(14, 4)
+  unit         String   @default("pc")
+  unitCost     Decimal? @db.Decimal(14, 4)
+  total        Decimal
+  notes        String?
+  /// FK to the packaging used at time of sale. Null = base unit sale.
+  packagingId  String?
+  /// Snapshot of conversionQty at time of sale (for refund calculations).
+  packagingQty Decimal? @db.Decimal(14, 4)
 
-  sale    Sale     @relation(fields: [saleId], references: [id], onDelete: Cascade)
-  product Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  sale      Sale              @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product   Product?          @relation(fields: [productId], references: [id], onDelete: SetNull)
+  packaging ProductPackaging? @relation(fields: [packagingId], references: [id], onDelete: SetNull)
 }
 
 // ============================================================

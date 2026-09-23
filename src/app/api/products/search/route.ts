@@ -14,6 +14,16 @@ const PRODUCT_SELECT = {
   barcode: true,
   category: true,
   imageUrl: true,
+  packagings: {
+    select: {
+      id: true,
+      name: true,
+      conversionQty: true,
+      price: true,
+      barcode: true,
+    },
+    orderBy: { createdAt: "asc" as const },
+  },
 } as const;
 
 const DEFAULT_LIMIT = 20;
@@ -23,6 +33,39 @@ function parseLimit(req: NextRequest): number {
   const raw = Number(req.nextUrl.searchParams.get("limit"));
   if (!Number.isFinite(raw) || raw <= 0) return DEFAULT_LIMIT;
   return Math.min(raw, MAX_LIMIT);
+}
+
+type ProductWithPackagings = {
+  id: string;
+  name: string;
+  price: { toString(): string };
+  stock: { toString(): string };
+  unit: string;
+  quantityPrecision: number;
+  sku: string | null;
+  barcode: string | null;
+  category: string | null;
+  imageUrl: string | null;
+  packagings: Array<{
+    id: string;
+    name: string;
+    conversionQty: { toString(): string };
+    price: { toString(): string };
+    barcode: string | null;
+  }>;
+};
+
+function serializeProduct(p: ProductWithPackagings) {
+  return {
+    ...p,
+    price: parseFloat(p.price.toString()),
+    stock: parseFloat(p.stock.toString()),
+    packagings: p.packagings.map((pkg) => ({
+      ...pkg,
+      conversionQty: parseFloat(pkg.conversionQty.toString()),
+      price: parseFloat(pkg.price.toString()),
+    })),
+  };
 }
 
 export async function GET(req: NextRequest) {
@@ -36,11 +79,10 @@ export async function GET(req: NextRequest) {
       orderBy: { name: "asc" },
       take,
     });
-    return NextResponse.json(
-      products.map((p: typeof products[number]) => ({ ...p, price: parseFloat(p.price.toString()), stock: parseFloat(p.stock.toString()) }))
-    );
+    return NextResponse.json(products.map(serializeProduct));
   }
 
+  // Also search packaging barcodes so scanning a box barcode resolves to the correct product
   const products = await prisma.product.findMany({
     where: {
       active: true,
@@ -48,6 +90,7 @@ export async function GET(req: NextRequest) {
         { name: { contains: q } },
         { sku: { contains: q } },
         { barcode: { equals: q } },
+        { packagings: { some: { barcode: { equals: q } } } },
       ],
     },
     select: PRODUCT_SELECT,
@@ -55,7 +98,5 @@ export async function GET(req: NextRequest) {
     orderBy: { name: "asc" },
   });
 
-  return NextResponse.json(
-    products.map((p: typeof products[number]) => ({ ...p, price: parseFloat(p.price.toString()), stock: parseFloat(p.stock.toString()) }))
-  );
+  return NextResponse.json(products.map(serializeProduct));
 }

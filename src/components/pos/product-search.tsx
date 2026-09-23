@@ -8,6 +8,14 @@ import { formatCurrency, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getDeviceSettings, playErrorBeep } from "@/hooks/use-device-settings";
 
+interface PackagingOption {
+  id: string;
+  name: string;
+  conversionQty: number;
+  price: number;
+  barcode: string | null;
+}
+
 interface ProductResult {
   id: string;
   name: string;
@@ -19,6 +27,7 @@ interface ProductResult {
   sku?: string | null;
   category?: string | null;
   imageUrl?: string | null;
+  packagings?: PackagingOption[];
 }
 
 export function ProductSearch() {
@@ -28,6 +37,7 @@ export function ProductSearch() {
   const [allProducts, setAllProducts] = useState<ProductResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [gridLoading, setGridLoading] = useState(true);
+  const [packagingPicker, setPackagingPicker] = useState<ProductResult | null>(null);
   const addItem = useCartStore((s) => s.addItem);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastKeypressRef = useRef<number>(0);
@@ -101,24 +111,97 @@ export function ProductSearch() {
     debounceRef.current = setTimeout(() => search(val), delay);
   }
 
-  function handleSelect(product: ProductResult) {
+  function addToCart(product: ProductResult, packaging?: PackagingOption) {
     addItem({
       productId: product.id,
       name: product.name,
-      price: product.price,
+      price: packaging ? packaging.price : product.price,
       stock: product.stock,
       unit: product.unit,
       quantityPrecision: product.quantityPrecision,
+      packagingId: packaging?.id,
+      packagingName: packaging?.name,
+      packagingQty: packaging?.conversionQty,
     });
     setQuery("");
     setResults([]);
+    setPackagingPicker(null);
+  }
+
+  function handleSelect(product: ProductResult) {
+    const packagings = product.packagings ?? [];
+
+    // If scanned query matches a packaging barcode, auto-add that packaging
+    const matchedPkg = packagings.find((pkg) => pkg.barcode && pkg.barcode === query.trim());
+    if (matchedPkg) {
+      addToCart(product, matchedPkg);
+      return;
+    }
+
+    // If product has packagings, show picker (unless it's a direct barcode scan of the product itself)
+    const isProductBarcodeScan = product.barcode && product.barcode === query.trim();
+    if (packagings.length > 0 && !isProductBarcodeScan) {
+      setPackagingPicker(product);
+      setQuery("");
+      setResults([]);
+      return;
+    }
+
+    // Default: add as base unit
+    addToCart(product);
   }
 
   const showSearchResults = Boolean(query.trim());
 
   return (
     <div className="flex flex-col h-full gap-3">
-      {/* Search bar with Variant A crisp border */}
+      {/* Packaging picker overlay */}
+      {packagingPicker && (
+        <div className="shrink-0 rounded-lg border border-primary/30 bg-card shadow-md p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-semibold text-sm">{packagingPicker.name}</p>
+              <p className="text-xs text-muted-foreground">Select packaging size</p>
+            </div>
+            <button
+              onClick={() => setPackagingPicker(null)}
+              className="hover:bg-muted rounded-md p-1 text-muted-foreground"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {/* Base unit option */}
+            <button
+              onClick={() => addToCart(packagingPicker)}
+              className="flex flex-col items-start rounded-md border px-3 py-2 text-left hover:border-primary/50 hover:bg-muted/40 transition-colors"
+            >
+              <span className="text-xs text-muted-foreground">Individual {packagingPicker.unit}</span>
+              <span className="font-bold text-primary font-mono">
+                {packagingPicker.price.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+              </span>
+            </button>
+            {/* Packaging options */}
+            {(packagingPicker.packagings ?? []).map((pkg) => (
+              <button
+                key={pkg.id}
+                onClick={() => addToCart(packagingPicker, pkg)}
+                disabled={(packagingPicker.stock ?? 0) < pkg.conversionQty}
+                className="flex flex-col items-start rounded-md border px-3 py-2 text-left hover:border-primary/50 hover:bg-muted/40 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <span className="text-xs text-muted-foreground">{pkg.name} ({pkg.conversionQty} {packagingPicker.unit}s)</span>
+                <span className="font-bold text-primary font-mono">
+                  {pkg.price.toLocaleString("en-PH", { style: "currency", currency: "PHP" })}
+                </span>
+                {(packagingPicker.stock ?? 0) < pkg.conversionQty && (
+                  <span className="text-[10px] text-destructive">Insufficient stock</span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="relative shrink-0">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input

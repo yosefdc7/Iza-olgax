@@ -88,6 +88,7 @@ export function PaymentPanel({
     Array<{ id: string; name: string; nextNumber: number }>
   >([]);
   const [receiptSeriesId, setReceiptSeriesId] = useState("");
+  const [drSiNumber, setDrSiNumber] = useState("");
   const [settingsHref, setSettingsHref] = useState("/settings#receipt-series-settings");
 
   useEffect(() => {
@@ -214,12 +215,14 @@ export function PaymentPanel({
     try {
       const body: Record<string, unknown> = {
         receiptSeriesId,
+        drSiNumber: drSiNumber.trim() || undefined,
         items: cartItems.map((i) => ({
           productId: i.productId,
           name: i.name,
           price: i.price,
           quantity: i.quantity,
           notes: i.notes || undefined,
+          packagingId: i.packagingId,
         })),
         taxRate: effectiveTaxRate,
         discountAmount,
@@ -269,6 +272,7 @@ export function PaymentPanel({
       } else {
         onClear();
       }
+      setDrSiNumber("");
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -312,19 +316,33 @@ export function PaymentPanel({
             Manage series
           </Link>
         </div>
-        <select
-          id="receipt-series"
-          value={receiptSeriesId}
-          onChange={(event) => setReceiptSeriesId(event.target.value)}
-          className="bg-background h-9 w-full rounded-md border px-2 text-sm"
-        >
-          {receiptSeries.length === 0 && <option value="">No active series configured</option>}
-          {receiptSeries.map((series) => (
-            <option key={series.id} value={series.id}>
-              {series.name} · next {String(series.nextNumber).padStart(6, "0")}
-            </option>
-          ))}
-        </select>
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <select
+              id="receipt-series"
+              value={receiptSeriesId}
+              onChange={(event) => setReceiptSeriesId(event.target.value)}
+              className="bg-background h-9 w-full rounded-md border px-2 text-sm"
+            >
+              {receiptSeries.length === 0 && <option value="">No active series</option>}
+              {receiptSeries.map((series) => (
+                <option key={series.id} value={series.id}>
+                  {series.name} ({String(series.nextNumber).padStart(6, "0")})
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <input
+              id="dr-si-no"
+              type="text"
+              value={drSiNumber}
+              onChange={(e) => setDrSiNumber(e.target.value)}
+              placeholder="DR / SI No. (opt)"
+              className="bg-background h-9 w-full rounded-md border px-2 text-sm"
+            />
+          </div>
+        </div>
         {receiptSeries.length === 0 && (
           <div className="mt-1 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
             <p className="font-semibold">An active receipt series is required.</p>

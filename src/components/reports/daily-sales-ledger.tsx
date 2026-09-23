@@ -7,6 +7,8 @@ import { formatCurrency } from "@/lib/utils";
 type LedgerSale = {
   id: string;
   receipt: { label: string; warning: string | null };
+  seriesName?: string | null;
+  drSiNumber?: string | null;
   createdAt: string;
   businessDate: string;
   customer: string;
@@ -20,6 +22,7 @@ type LedgerSale = {
     quantity: number;
     unit: string;
     unitPrice: number;
+    basePrice?: number | null;
     unitCost?: number | null;
     sellingValue: number;
     grossProfit?: number | null;
@@ -28,7 +31,15 @@ type LedgerSale = {
 
 type LedgerData = {
   sales: LedgerSale[];
-  totals: { sales: number; grossRevenue: number; refunds: number; grossProfit: number };
+  totals: {
+    sales: number;
+    grossRevenue: number;
+    refunds: number;
+    grossProfit: number;
+    seriesTotals?: Record<string, number>;
+    totalBaseValue?: number;
+    totalSellingValue?: number;
+  };
   series: Array<{ id: string; name: string }>;
   cashiers: Array<{ id: string; name: string }>;
   totalCount: number;
@@ -213,9 +224,21 @@ export function DailySalesLedger({ isAdmin }: { isAdmin: boolean }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Metric label="Receipts on this page" value={String(data.totals?.sales ?? 0)} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+        <Metric label="Receipts on page" value={String(data.totals?.sales ?? 0)} />
         <Metric label="Gross revenue" value={formatCurrency(data.totals?.grossRevenue ?? 0)} />
+        {data.totals?.seriesTotals?.["211"] != null && (
+          <Metric label="211 Receipts" value={formatCurrency(data.totals.seriesTotals["211"])} />
+        )}
+        {data.totals?.seriesTotals?.["CHB"] != null && (
+          <Metric label="CHB Receipts" value={formatCurrency(data.totals.seriesTotals["CHB"])} />
+        )}
+        {data.totals?.totalBaseValue != null && (
+          <Metric label="Total Base Value" value={formatCurrency(data.totals.totalBaseValue)} />
+        )}
+        {data.totals?.totalSellingValue != null && (
+          <Metric label="Total Selling Value" value={formatCurrency(data.totals.totalSellingValue)} />
+        )}
         <Metric label="Refunds" value={formatCurrency(data.totals?.refunds ?? 0)} />
         {isAdmin && (
           <Metric label="Gross profit" value={formatCurrency(data.totals?.grossProfit ?? 0)} />
@@ -299,14 +322,19 @@ function ReceiptGroup({
   return (
     <article className="bg-card break-inside-avoid overflow-hidden rounded-md border">
       <header className="bg-muted/30 flex flex-wrap items-center justify-between gap-2 border-b px-3 py-2 text-sm">
-        <div>
+        <div className="flex items-center gap-2">
           <span className="font-mono font-bold">{sale.receipt.label}</span>
+          {sale.drSiNumber && (
+            <span className="rounded bg-sky-100 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-sky-900 dark:bg-sky-950 dark:text-sky-200">
+              DR/SI: {sale.drSiNumber}
+            </span>
+          )}
           {sale.receipt.warning && (
-            <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-900">
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] text-amber-900">
               {sale.receipt.warning}
             </span>
           )}
-          <span className="text-muted-foreground ml-3">{sale.customer}</span>
+          <span className="text-muted-foreground ml-2">{sale.customer}</span>
         </div>
         <div className="text-muted-foreground text-xs">
           {new Intl.DateTimeFormat(undefined, {
@@ -323,7 +351,8 @@ function ReceiptGroup({
             <tr className="text-muted-foreground border-b text-left">
               <th className="p-2">Item</th>
               <th className="p-2 text-right">Quantity</th>
-              <th className="p-2 text-right">Unit price</th>
+              <th className="p-2 text-right">Base price</th>
+              <th className="p-2 text-right">Selling price</th>
               {isAdmin && (
                 <>
                   <th className="p-2 text-right">Unit cost</th>
@@ -340,7 +369,12 @@ function ReceiptGroup({
                 <td className="p-2 text-right font-mono">
                   {item.quantity} {item.unit}
                 </td>
-                <td className="p-2 text-right font-mono">{formatCurrency(item.unitPrice)}</td>
+                <td className="p-2 text-right font-mono text-muted-foreground">
+                  {formatCurrency(item.basePrice ?? item.unitPrice)}
+                </td>
+                <td className="p-2 text-right font-mono font-medium">
+                  {formatCurrency(item.unitPrice)}
+                </td>
                 {isAdmin && (
                   <>
                     <td className="p-2 text-right font-mono">

@@ -144,3 +144,143 @@ export function formatReceiptReference(input: {
     warning: null,
   };
 }
+
+export interface LedgerItemData {
+  id: string;
+  name: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  basePrice?: number | null;
+  unitCost?: number | null;
+  sellingValue: number;
+  grossProfit?: number | null;
+}
+
+export interface LedgerSaleData {
+  id: string;
+  seriesName?: string | null;
+  drSiNumber?: string | null;
+  receiptNumber?: number | null;
+  legacyReference?: string | null;
+  backfilled?: boolean;
+  businessDate: string;
+  customer: string;
+  cashier: string;
+  status: string;
+  total: number;
+  refundTotal: number;
+  items: LedgerItemData[];
+}
+
+export interface LedgerCalculatedTotals {
+  sales: number;
+  grossRevenue: number;
+  refunds: number;
+  grossProfit: number;
+  seriesTotals: Record<string, number>;
+  totalBaseValue: number;
+  totalSellingValue: number;
+}
+
+export function calculateLedgerTotals(
+  sales: LedgerSaleData[],
+  isAdmin: boolean
+): LedgerCalculatedTotals {
+  const seriesTotals: Record<string, number> = {};
+  let totalBaseValue = 0;
+  let totalSellingValue = 0;
+  let grossProfit = 0;
+  let grossRevenue = 0;
+  let refunds = 0;
+
+  for (const sale of sales) {
+    grossRevenue += sale.total;
+    refunds += sale.refundTotal;
+
+    const sName = sale.seriesName || "Other";
+    seriesTotals[sName] = (seriesTotals[sName] || 0) + sale.total;
+
+    for (const item of sale.items) {
+      totalSellingValue += item.sellingValue;
+      const effectiveBasePrice = item.basePrice ?? item.unitPrice;
+      totalBaseValue += effectiveBasePrice * item.quantity;
+
+      if (isAdmin && item.grossProfit != null) {
+        grossProfit += item.grossProfit;
+      }
+    }
+  }
+
+  return {
+    sales: sales.length,
+    grossRevenue,
+    refunds,
+    grossProfit,
+    seriesTotals,
+    totalBaseValue,
+    totalSellingValue,
+  };
+}
+
+export function formatLedgerCsvRows(
+  sales: LedgerSaleData[],
+  isAdmin: boolean
+): string[] {
+  const columns = [
+    "Business Date",
+    "Customer",
+    "Receipt",
+    "DR / SI No.",
+    "Qty",
+    "Unit",
+    "Item",
+    "Base Price",
+    "Selling Price",
+    ...(isAdmin ? ["Unit Cost", "Gross Profit"] : []),
+    "Selling Value",
+    "Sale Total",
+    "Refund Total",
+    "Cashier",
+    "Status",
+  ];
+
+  const rows = [columns.map(csvCell).join(",")];
+
+  for (const sale of sales) {
+    const receiptRef = formatReceiptReference({
+      seriesName: sale.seriesName,
+      receiptNumber: sale.receiptNumber,
+      legacyReference: sale.legacyReference,
+      backfilled: sale.backfilled,
+    });
+
+    for (const item of sale.items) {
+      const effectiveBasePrice = item.basePrice ?? item.unitPrice;
+      rows.push(
+        [
+          sale.businessDate,
+          sale.customer,
+          receiptRef.label,
+          sale.drSiNumber ?? "",
+          item.quantity,
+          item.unit,
+          item.name,
+          effectiveBasePrice,
+          item.unitPrice,
+          ...(isAdmin ? [item.unitCost ?? "", item.grossProfit ?? ""] : []),
+          item.sellingValue,
+          sale.total,
+          sale.refundTotal,
+          sale.cashier,
+          sale.status,
+        ]
+          .map(csvCell)
+          .join(",")
+      );
+    }
+  }
+
+  return rows;
+}
+

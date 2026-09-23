@@ -12,6 +12,9 @@ import {
   isValidTimeZone,
   formatReceiptReference,
   resolveLedgerScope,
+  calculateLedgerTotals,
+  formatLedgerCsvRows,
+  type LedgerSaleData,
 } from "@/lib/daily-ledger";
 
 const ledgerQuerySchema = z.object({
@@ -38,6 +41,7 @@ const saleInclude = {
       unit: true,
       unitCost: true,
       price: true,
+      basePrice: true,
       total: true,
     },
   },
@@ -152,12 +156,15 @@ export async function GET(req: NextRequest) {
       const quantity = parseFloat(item.quantity.toString());
       const sellingValue = parseFloat(item.total.toString());
       const unitCost = item.unitCost == null ? null : parseFloat(item.unitCost.toString());
+      const unitPrice = parseFloat(item.price.toString());
+      const basePrice = item.basePrice == null ? null : parseFloat(item.basePrice.toString());
       return {
         id: item.id,
         name: item.name,
         quantity,
         unit: item.unit,
-        unitPrice: parseFloat(item.price.toString()),
+        unitPrice,
+        basePrice,
         sellingValue,
         ...(isAdmin
           ? { unitCost, grossProfit: unitCost == null ? null : sellingValue - unitCost * quantity }
@@ -171,6 +178,11 @@ export async function GET(req: NextRequest) {
     return {
       id: sale.id,
       receipt,
+      seriesName: sale.receiptSeries?.name,
+      receiptNumber: sale.receiptNumber,
+      legacyReference: sale.legacyReference,
+      backfilled: sale.backfilled,
+      drSiNumber: sale.drSiNumber,
       createdAt: sale.createdAt,
       businessDate: businessDateForInstant(sale.createdAt, timeZone),
       customer: sale.customer?.name ?? "Cash",
@@ -182,64 +194,10 @@ export async function GET(req: NextRequest) {
     };
   });
 
-  const totals = sales.reduce(
-    (acc, sale) => {
-      acc.sales += 1;
-      acc.grossRevenue += sale.total;
-      acc.refunds += sale.refundTotal;
-      if (isAdmin) {
-        for (const item of sale.items) {
-          if ("grossProfit" in item && item.grossProfit != null)
-            acc.grossProfit += item.grossProfit;
-        }
-      }
-      return acc;
-    },
-    { sales: 0, grossRevenue: 0, refunds: 0, grossProfit: 0 }
-  );
+  const totals = calculateLedgerTotals(sales as LedgerSaleData[], isAdmin);
 
   if (isCsv) {
-    const columns = [
-      "Business Date",
-      "Receipt",
-      "Warning",
-      "Status",
-      "Customer",
-      "Cashier",
-      "Item",
-      "Quantity",
-      "Unit",
-      "Unit Price",
-      ...(isAdmin ? ["Unit Cost", "Gross Profit"] : []),
-      "Selling Value",
-      "Sale Total",
-      "Refund Total",
-    ];
-    const rows = [columns.map(csvCell).join(",")];
-    for (const sale of sales) {
-      for (const item of sale.items) {
-        rows.push(
-          [
-            sale.businessDate,
-            sale.receipt.label,
-            sale.receipt.warning,
-            sale.status,
-            sale.customer,
-            sale.cashier,
-            item.name,
-            item.quantity,
-            item.unit,
-            item.unitPrice,
-            ...(isAdmin && "unitCost" in item ? [item.unitCost, item.grossProfit] : []),
-            item.sellingValue,
-            sale.total,
-            sale.refundTotal,
-          ]
-            .map(csvCell)
-            .join(",")
-        );
-      }
-    }
+    const rows = formatLedgerCsvRows(sales as LedgerSaleData[], isAdmin);
     if (sales.some((sale) => sale.receipt.warning)) {
       rows.push(
         csvCell(

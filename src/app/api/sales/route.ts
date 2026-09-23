@@ -16,6 +16,8 @@ const saleSchema = z.object({
         price: z.number().finite().optional(),
         quantity: z.number().finite().positive(),
         notes: z.string().optional(),
+        /** Optional packaging ID. When present, stock is deducted in base units (quantity × conversionQty). */
+        packagingId: z.string().optional(),
       })
     )
     .min(1),
@@ -37,6 +39,7 @@ const saleSchema = z.object({
   discountType: z.enum(["fixed", "percent"]).default("fixed"),
   note: z.string().optional(),
   customerId: z.string().optional(),
+  drSiNumber: z.string().trim().optional(),
   /** Loyalty points to redeem as discount (0 = no redemption) */
   loyaltyPointsUsed: z.number().int().min(0).default(0),
 });
@@ -67,6 +70,7 @@ export async function POST(req: NextRequest) {
     discountType,
     note,
     customerId,
+    drSiNumber,
     loyaltyPointsUsed,
   } = parsed.data;
 
@@ -123,9 +127,15 @@ export async function POST(req: NextRequest) {
           quantityPrecision: true,
           cost: true,
           active: true,
+          stock: true,
+          packagings: {
+            select: { id: true, name: true, conversionQty: true, price: true },
+          },
         },
       });
       const productMap = new Map(products.map((product) => [product.id, product] as const));
+
+      // Resolve packaging for each item and validate stock
       const normalizedItems = items.map((item) => {
         const product = productMap.get(item.productId);
         if (!product) throw new SaleInputError(`Product not found: ${item.productId}`);
@@ -135,14 +145,46 @@ export async function POST(req: NextRequest) {
             `${product.name} allows at most ${product.quantityPrecision} decimal places`
           );
         }
+
+        let packagingId: string | undefined;
+        let packagingQty: number | undefined;
+        let unitPrice: number;
+        let stockDeduction: number;
+        const basePrice = parseFloat(product.price.toString());
+
+        if (item.packagingId) {
+          const pkg = product.packagings.find((p) => p.id === item.packagingId);
+          if (!pkg) throw new SaleInputError(`Packaging not found for ${product.name}`);
+          packagingId = pkg.id;
+          packagingQty = parseFloat(pkg.conversionQty.toString());
+          unitPrice = parseFloat(pkg.price.toString());
+          stockDeduction = item.quantity * packagingQty;
+
+          // Stock validation: block sale if insufficient base units
+          const currentStock = parseFloat(product.stock.toString());
+          if (stockDeduction > currentStock + 1e-7) {
+            throw new SaleInputError(
+              `Insufficient stock for ${product.name} (${pkg.name}): ` +
+                `requires ${stockDeduction} ${product.unit}s, only ${currentStock} available`
+            );
+          }
+        } else {
+          unitPrice = basePrice;
+          stockDeduction = item.quantity;
+        }
+
         return {
           productId: product.id,
           name: product.name,
-          price: parseFloat(product.price.toString()),
+          price: unitPrice,
+          basePrice,
           quantity: item.quantity,
           unit: product.unit,
           unitCost: product.cost == null ? null : parseFloat(product.cost.toString()),
           notes: item.notes,
+          packagingId,
+          packagingQty,
+          stockDeduction,
         };
       });
 
@@ -212,6 +254,7 @@ export async function POST(req: NextRequest) {
           receiptSeriesId: issued[0].id,
           receiptNumber: issued[0].receiptNumber,
           customerId: customerId || undefined,
+          drSiNumber: drSiNumber || undefined,
           subtotal,
           taxRate,
           taxAmount: taxAmt,
@@ -230,11 +273,14 @@ export async function POST(req: NextRequest) {
               productId: item.productId,
               name: item.name,
               price: item.price,
+              basePrice: item.basePrice,
               quantity: item.quantity,
               unit: item.unit,
               unitCost: item.unitCost,
               total: item.price * item.quantity,
               notes: item.notes,
+              packagingId: item.packagingId ?? null,
+              packagingQty: item.packagingQty ?? null,
             })),
           },
         },
@@ -244,7 +290,8 @@ export async function POST(req: NextRequest) {
       for (const item of normalizedItems) {
         await tx.product.update({
           where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
+          // stockDeduction = quantity × conversionQty for packaged items, or quantity for base items
+          data: { stock: { decrement: item.stockDeduction } },
         });
       }
 
