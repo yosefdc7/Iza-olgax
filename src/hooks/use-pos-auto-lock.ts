@@ -13,7 +13,10 @@ export function usePosAutoLock({
 }: UsePosAutoLockOptions) {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const onLockRef = useRef(onLock);
-  onLockRef.current = onLock;
+
+  useEffect(() => {
+    onLockRef.current = onLock;
+  }, [onLock]);
 
   useEffect(() => {
     if (autoLockMinutes <= 0 || isLocked) {

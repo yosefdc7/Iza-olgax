@@ -7,6 +7,8 @@ import { Menu, ShoppingCart, Package, ReceiptText, BarChart3, Settings } from "l
 import { AppSidebar } from "./app-sidebar";
 import { SyncStatusBadge } from "./sync-status-badge";
 import { DarkModeToggle } from "./dark-mode-toggle";
+import { LowStockAlertWidget } from "@/components/pos/low-stock-alert-widget";
+import { StockNotificationListener } from "@/components/layout/stock-notification-listener";
 import { cn } from "@/lib/utils";
 
 interface AppShellProps {
@@ -105,6 +107,8 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
           </div>
 
           <div className="flex items-center gap-2">
+            <LowStockAlertWidget />
+            <div className="h-4 w-px bg-border/60" />
             <SyncStatusBadge />
             <div className="h-4 w-px bg-border/60" />
             <DarkModeToggle />
@@ -112,6 +116,7 @@ export function AppShell({ user, cssVars, children }: AppShellProps) {
         </header>
 
         {/* Page content */}
+        <StockNotificationListener />
         <main className="flex-1 overflow-y-auto print:overflow-visible bg-background/50">{children}</main>
 
         {/* Mobile bottom navigation */}

@@ -357,7 +357,46 @@ export async function POST(req: NextRequest) {
         /* handled inside fire() */
       });
 
-    return NextResponse.json({ sale }, { status: 201 });
+    // Detect products whose stock level has dropped to or below their lowStockThreshold
+    let lowStockAlerts: Array<{
+      id: string;
+      name: string;
+      stock: number;
+      lowStockThreshold: number;
+      unit: string;
+      isOutOfStock: boolean;
+    }> = [];
+
+    try {
+      const updatedProducts = await prisma.product.findMany({
+        where: {
+          id: { in: items.map((i) => i.productId) },
+          active: true,
+        },
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+          lowStockThreshold: true,
+          unit: true,
+        },
+      });
+
+      lowStockAlerts = updatedProducts
+        .filter((p) => parseFloat(p.stock.toString()) <= parseFloat(p.lowStockThreshold.toString()))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          stock: parseFloat(p.stock.toString()),
+          lowStockThreshold: parseFloat(p.lowStockThreshold.toString()),
+          unit: p.unit,
+          isOutOfStock: parseFloat(p.stock.toString()) <= 0,
+        }));
+    } catch {
+      // Best-effort stock alert detection
+    }
+
+    return NextResponse.json({ sale, lowStockAlerts }, { status: 201 });
   } catch (error) {
     if (error instanceof SaleInputError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

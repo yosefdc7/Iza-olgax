@@ -2,11 +2,13 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslations } from "next-intl";
-import { Search, Plus, AlertTriangle, Barcode } from "lucide-react";
+import { Search, Plus, AlertTriangle, Barcode, FilterX } from "lucide-react";
 import { useCartStore } from "@/store/cart";
 import { formatCurrency, cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { getDeviceSettings, playErrorBeep } from "@/hooks/use-device-settings";
+import { LowStockBanner } from "./low-stock-banner";
+import { AlertsWidget } from "@/components/dashboard/alerts-widget";
 
 interface PackagingOption {
   id: string;
@@ -23,6 +25,7 @@ interface ProductResult {
   stock: number;
   unit: string;
   quantityPrecision: number;
+  lowStockThreshold?: number;
   barcode?: string | null;
   sku?: string | null;
   category?: string | null;
@@ -37,29 +40,41 @@ export function ProductSearch() {
   const [allProducts, setAllProducts] = useState<ProductResult[]>([]);
   const [loading, setLoading] = useState(false);
   const [gridLoading, setGridLoading] = useState(true);
+  const [filterLowStockOnly, setFilterLowStockOnly] = useState(false);
+  const [viewMode, setViewMode] = useState<"catalog" | "alerts">("catalog");
   const [packagingPicker, setPackagingPicker] = useState<ProductResult | null>(null);
   const addItem = useCartStore((s) => s.addItem);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastKeypressRef = useRef<number>(0);
 
+  const loadGrid = useCallback(async () => {
+    setGridLoading(true);
+    try {
+      const res = await fetch("/api/products/search?q=&limit=60");
+      if (res.ok) {
+        const data = await res.json();
+        setAllProducts(data);
+      }
+    } catch {
+      // ignore — grid is optional
+    } finally {
+      setGridLoading(false);
+    }
+  }, []);
+
   // Load all products on mount for the quick-add grid
   useEffect(() => {
-    async function loadGrid() {
-      setGridLoading(true);
-      try {
-        const res = await fetch("/api/products/search?q=&limit=60");
-        if (res.ok) {
-          const data = await res.json();
-          setAllProducts(data);
-        }
-      } catch {
-        // ignore — grid is optional
-      } finally {
-        setGridLoading(false);
-      }
-    }
     loadGrid();
-  }, []);
+  }, [loadGrid]);
+
+  // Re-load grid whenever stock changes in POS (sales completed, stock adjustments)
+  useEffect(() => {
+    const handleStockChange = () => {
+      loadGrid();
+    };
+    window.addEventListener("pos:stock-changed", handleStockChange);
+    return () => window.removeEventListener("pos:stock-changed", handleStockChange);
+  }, [loadGrid]);
 
   const search = useCallback(async (q: string) => {
     if (!q.trim()) {
@@ -117,6 +132,7 @@ export function ProductSearch() {
       name: product.name,
       price: packaging ? packaging.price : product.price,
       stock: product.stock,
+      lowStockThreshold: product.lowStockThreshold ?? 5,
       unit: product.unit,
       quantityPrecision: product.quantityPrecision,
       packagingId: packaging?.id,
@@ -153,8 +169,39 @@ export function ProductSearch() {
 
   const showSearchResults = Boolean(query.trim());
 
+  const displayedProducts = filterLowStockOnly
+    ? allProducts.filter((p) => p.stock <= (p.lowStockThreshold ?? 5))
+    : allProducts;
+
   return (
     <div className="flex flex-col h-full gap-3">
+      {/* Explicit Low-Stock Alert Banner in POS Layout */}
+      <LowStockBanner
+        onFilterLowStock={setFilterLowStockOnly}
+        isFilterActive={filterLowStockOnly}
+        onOpenAlertsWidget={() => setViewMode("alerts")}
+      />
+
+      {/* Filter Active Notice */}
+      {filterLowStockOnly && (
+        <div className="flex items-center justify-between rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs">
+          <div className="flex items-center gap-1.5 font-semibold text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="h-4 w-4" />
+            <span>
+              Showing {displayedProducts.length} product{displayedProducts.length === 1 ? "" : "s"} at or below their defined low-stock threshold
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFilterLowStockOnly(false)}
+            className="flex items-center gap-1 rounded bg-background/90 hover:bg-background border border-border px-2 py-0.5 text-xs font-semibold text-foreground transition-colors"
+          >
+            <FilterX className="h-3 w-3" />
+            <span>Show All</span>
+          </button>
+        </div>
+      )}
+
       {/* Packaging picker overlay */}
       {packagingPicker && (
         <div className="shrink-0 rounded-lg border border-primary/30 bg-card shadow-md p-4 space-y-3">
@@ -239,31 +286,130 @@ export function ProductSearch() {
           )}
           {results.length > 0 && (
             <div className="rounded-lg border border-border bg-card divide-y divide-border/60 overflow-hidden shadow-xs">
-              {results.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => handleSelect(p)}
-                  className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
-                >
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{p.name}</p>
-                    {p.sku && (
-                      <p className="text-xs text-muted-foreground font-mono">SKU: {p.sku}</p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold font-mono text-primary">{formatCurrency(p.price)}</p>
-                    <p className="text-[11px] text-muted-foreground">Stock: {p.stock}</p>
-                  </div>
-                </button>
-              ))}
+              {results.map((p) => {
+                const threshold = p.lowStockThreshold ?? 5;
+                const isZero = p.stock <= 0;
+                const isLow = p.stock > 0 && p.stock <= threshold;
+
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelect(p)}
+                    className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-foreground">{p.name}</p>
+                        {isZero && (
+                          <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-destructive/10 text-destructive border border-destructive/30">
+                            OUT OF STOCK
+                          </span>
+                        )}
+                        {isLow && (
+                          <span className="text-[10px] font-bold font-mono px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                            LOW STOCK
+                          </span>
+                        )}
+                      </div>
+                      {p.sku && (
+                        <p className="text-xs text-muted-foreground font-mono">SKU: {p.sku}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold font-mono text-primary">{formatCurrency(p.price)}</p>
+                      <p
+                        className={cn(
+                          "text-[11px] font-mono",
+                          isZero
+                            ? "text-destructive font-bold"
+                            : isLow
+                              ? "text-amber-600 dark:text-amber-400 font-semibold"
+                              : "text-muted-foreground"
+                        )}
+                      >
+                        {isZero
+                          ? `Out (0/${threshold} ${p.unit})`
+                          : isLow
+                            ? `Low (${p.stock}/${threshold} ${p.unit})`
+                            : `Stock: ${p.stock} ${p.unit}`}
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
       )}
 
-      {/* Quick-add product grid with Variant A linear cards */}
+      {/* View Mode Switcher between Catalog Grid and Alerts Widget */}
       {!showSearchResults && (
+        <div className="flex items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-1 bg-muted/40 p-0.5 rounded-md border border-border/60 text-xs">
+            <button
+              type="button"
+              onClick={() => setViewMode("catalog")}
+              className={cn(
+                "px-2.5 py-1 rounded-sm font-semibold transition-all",
+                viewMode === "catalog"
+                  ? "bg-card text-foreground shadow-2xs font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              Catalog Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("alerts")}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-sm font-semibold transition-all",
+                viewMode === "alerts"
+                  ? "bg-amber-500/20 text-amber-700 dark:text-amber-400 font-bold shadow-2xs"
+                  : "text-muted-foreground hover:text-amber-600"
+              )}
+            >
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+              <span>Alerts Widget</span>
+            </button>
+          </div>
+          {viewMode === "alerts" && (
+            <span className="text-[11px] text-muted-foreground hidden sm:inline">
+              Select or adjust products below threshold
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Render Alerts Widget if in alerts view mode */}
+      {!showSearchResults && viewMode === "alerts" && (
+        <div className="flex-1 overflow-y-auto pr-1">
+          <AlertsWidget
+            variant="pos"
+            title="POS Low-Stock Alerts"
+            onSelectProduct={(item) => {
+              const found = allProducts.find((p) => p.id === item.id);
+              if (found) {
+                handleSelect(found);
+              } else {
+                handleSelect({
+                  id: item.id,
+                  name: item.name,
+                  price: item.price,
+                  stock: item.stock,
+                  unit: item.unit,
+                  quantityPrecision: 0,
+                  lowStockThreshold: item.lowStockThreshold,
+                  sku: item.sku,
+                  category: item.category,
+                });
+              }
+            }}
+          />
+        </div>
+      )}
+
+      {/* Quick-add product grid with Variant A linear cards */}
+      {!showSearchResults && viewMode === "catalog" && (
         <div className="flex-1 overflow-y-auto pr-1">
           {gridLoading ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
@@ -271,65 +417,89 @@ export function ProductSearch() {
                 <div key={i} className="h-24 rounded-lg border border-border/60 bg-muted/40 animate-pulse" />
               ))}
             </div>
-          ) : allProducts.length === 0 ? (
-            <div className="flex h-48 items-center justify-center rounded-lg border border-dashed border-border/80 text-muted-foreground text-sm">
-              No products found in catalog
+          ) : displayedProducts.length === 0 ? (
+            <div className="flex flex-col h-48 items-center justify-center rounded-lg border border-dashed border-border/80 text-muted-foreground text-sm p-4 text-center">
+              <p>
+                {filterLowStockOnly
+                  ? "No products currently below their defined low-stock threshold!"
+                  : "No products found in catalog"}
+              </p>
+              {filterLowStockOnly && (
+                <button
+                  type="button"
+                  onClick={() => setFilterLowStockOnly(false)}
+                  className="mt-2 text-xs font-semibold text-primary underline hover:no-underline"
+                >
+                  Show all products
+                </button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5">
-              {allProducts.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => handleSelect(p)}
-                  disabled={p.stock === 0}
-                  className={cn(
-                    "group relative flex flex-col justify-between rounded-lg border border-border/80 p-3 text-left transition-all min-h-[5.5rem] shadow-xs",
-                    p.stock === 0
-                      ? "opacity-50 cursor-not-allowed bg-muted/40"
-                      : "hover:border-primary/50 hover:bg-muted/40 hover:shadow-xs active:scale-[0.99] cursor-pointer bg-card"
-                  )}
-                >
-                  <div className="flex w-full items-start justify-between gap-1">
-                    <p className="text-xs font-semibold leading-tight line-clamp-2 flex-1 text-foreground group-hover:text-primary transition-colors">
-                      {p.name}
-                    </p>
-                    <div className="h-5 w-5 rounded-md border border-border/60 flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:border-primary/40 transition-colors">
-                      <Plus className="h-3 w-3" />
-                    </div>
-                  </div>
+              {displayedProducts.map((p) => {
+                const threshold = p.lowStockThreshold ?? 5;
+                const isZero = p.stock <= 0;
+                const isLow = p.stock > 0 && p.stock <= threshold;
 
-                  {p.imageUrl ? (
-                    <div className="flex w-full justify-center my-1">
-                      <img
-                        src={p.imageUrl}
-                        alt={p.name}
-                        className="rounded-md object-cover h-14 w-full"
-                      />
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelect(p)}
+                    disabled={isZero}
+                    className={cn(
+                      "group relative flex flex-col justify-between rounded-lg border p-3 text-left transition-all min-h-[5.5rem] shadow-xs",
+                      isZero
+                        ? "opacity-60 cursor-not-allowed bg-muted/30 border-destructive/30"
+                        : isLow
+                          ? "border-amber-500/40 bg-card hover:border-amber-500/70 hover:bg-amber-500/5 cursor-pointer"
+                          : "border-border/80 hover:border-primary/50 hover:bg-muted/40 hover:shadow-xs active:scale-[0.99] cursor-pointer bg-card"
+                    )}
+                  >
+                    <div className="flex w-full items-start justify-between gap-1">
+                      <p className="text-xs font-semibold leading-tight line-clamp-2 flex-1 text-foreground group-hover:text-primary transition-colors">
+                        {p.name}
+                      </p>
+                      <div className="h-5 w-5 rounded-md border border-border/60 flex items-center justify-center text-muted-foreground group-hover:text-primary group-hover:border-primary/40 transition-colors">
+                        <Plus className="h-3 w-3" />
+                      </div>
                     </div>
-                  ) : null}
 
-                  {/* Bottom Line Info */}
-                  <div className="flex w-full items-baseline justify-between mt-2 pt-1.5 border-t border-border/50">
-                    <span className="text-sm font-bold font-mono text-primary">
-                      {formatCurrency(p.price)}
-                    </span>
-                    {p.stock > 0 && p.stock <= 5 && (
-                      <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.2 rounded">
-                        <AlertTriangle className="h-2.5 w-2.5" />
-                        {p.stock}
+                    {p.imageUrl ? (
+                      <div className="flex w-full justify-center my-1">
+                        <img
+                          src={p.imageUrl}
+                          alt={p.name}
+                          className="rounded-md object-cover h-14 w-full"
+                        />
+                      </div>
+                    ) : null}
+
+                    {/* Bottom Line Info */}
+                    <div className="flex w-full items-baseline justify-between mt-2 pt-1.5 border-t border-border/50">
+                      <span className="text-sm font-bold font-mono text-primary">
+                        {formatCurrency(p.price)}
                       </span>
-                    )}
-                    {p.stock === 0 && (
-                      <span className="text-[10px] text-destructive font-bold">Out</span>
-                    )}
-                    {p.stock > 5 && (
-                      <span className="text-[10px] text-muted-foreground/80 font-mono">
-                        {p.stock} left
-                      </span>
-                    )}
-                  </div>
-                </button>
-              ))}
+                      {isZero && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-bold text-destructive">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          Out (0/{threshold})
+                        </span>
+                      )}
+                      {isLow && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20">
+                          <AlertTriangle className="h-2.5 w-2.5" />
+                          {p.stock}/{threshold}
+                        </span>
+                      )}
+                      {!isZero && !isLow && (
+                        <span className="text-[10px] text-muted-foreground/80 font-mono">
+                          {p.stock} left
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

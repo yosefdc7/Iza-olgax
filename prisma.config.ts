@@ -4,13 +4,16 @@ import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 function getDatabaseUrl(): string | undefined {
-  if (process.env["DATABASE_URL"]) return process.env["DATABASE_URL"];
   if (process.env["SQL_HOST"] && process.env["SQL_ADMIN_USER"]) {
     const user = encodeURIComponent(process.env["SQL_ADMIN_USER"]);
     const pass = encodeURIComponent(process.env["SQL_ADMIN_PASSWORD"] || "");
     const host = encodeURIComponent(process.env["SQL_HOST"]);
     const db = process.env["SQL_DB_NAME"] || "cloud_sql_development_database";
-    return `postgresql://${user}:${pass}@/${db}?host=${host}`;
+    return `postgresql://${user}:${pass}@localhost/${db}?host=${host}`;
+  }
+  const dbUrl = process.env["DATABASE_URL"];
+  if (dbUrl && !dbUrl.includes("<") && !dbUrl.includes(">")) {
+    return dbUrl;
   }
   return undefined;
 }

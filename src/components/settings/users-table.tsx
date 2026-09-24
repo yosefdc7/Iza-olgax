@@ -41,7 +41,7 @@ export function UsersTable({ users, onUserDeleted, onUserUpdated }: UsersTablePr
 
       toast.success("User deleted successfully");
       onUserDeleted?.(userId);
-    } catch (e) {
+    } catch {
       toast.error("Failed to delete user");
       setDeleting(null);
     }

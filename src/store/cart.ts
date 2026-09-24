@@ -12,6 +12,7 @@ export interface CartItem {
   notes: string;
   /** Snapshot of stock at time of add (for offline validation) */
   stock: number;
+  lowStockThreshold?: number;
   unit: string;
   quantityPrecision: number;
   // ── Packaging fields (optional) ──────────────────────────────────────────

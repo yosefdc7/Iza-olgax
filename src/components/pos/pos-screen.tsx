@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useTranslations } from "next-intl";
 import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "sonner";
 import { useCartStore } from "@/store/cart";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
@@ -122,7 +123,6 @@ export function POSScreen() {
     amountTendered,
     paymentMethod,
     paymentLines,
-    tipAmount,
   } = useCartStore();
 
   const sub = subtotal();
@@ -168,7 +168,6 @@ export function POSScreen() {
       subtotal: sub,
       discountAmount: disc,
       taxAmount: tax,
-      tipAmount: tipAmount > 0 ? tipAmount : undefined,
       total: tot,
       paymentMethod,
       paymentLines: paymentLines.length > 0 ? paymentLines : undefined,
@@ -177,6 +176,27 @@ export function POSScreen() {
       createdAt: new Date(),
     };
     setReceiptData(data);
+
+    // Notify application that stock levels changed
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("pos:stock-changed"));
+    }
+
+    // Explicitly alert user if any purchased product is now low on stock or out of stock
+    for (const item of items) {
+      const threshold = item.lowStockThreshold ?? 5;
+      const remainingStock = item.stock - item.quantity;
+      if (remainingStock <= 0) {
+        toast.error(`Stock Alert: "${item.name}" is now OUT OF STOCK (0/${threshold} ${item.unit})`, {
+          duration: 6000,
+        });
+      } else if (remainingStock <= threshold) {
+        toast.warning(`Low Stock Warning: "${item.name}" stock fell to ${remainingStock}/${threshold} ${item.unit}`, {
+          duration: 5000,
+        });
+      }
+    }
+
     clearCart();
     setCustomer(null);
   }
@@ -306,9 +326,21 @@ export function POSScreen() {
                       <p className="text-foreground truncate text-sm leading-tight font-semibold">
                         {item.name}
                       </p>
-                      <p className="text-muted-foreground mt-0.5 font-mono text-xs">
-                        {formatCurrency(item.price)} / {item.unit}
-                      </p>
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <p className="text-muted-foreground font-mono text-xs">
+                          {formatCurrency(item.price)} / {item.unit}
+                        </p>
+                        {item.stock <= (item.lowStockThreshold ?? 5) && (
+                          <span className="text-[10px] font-mono font-semibold text-amber-600 dark:text-amber-400">
+                            · Low ({item.stock} left)
+                          </span>
+                        )}
+                        {item.quantity > item.stock && (
+                          <span className="text-[10px] font-bold text-destructive">
+                            · Exceeds stock ({item.stock})
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Quantity controls */}
@@ -438,13 +470,6 @@ export function POSScreen() {
             <div className="text-muted-foreground flex justify-between">
               <span>{t("tax")}</span>
               <span className="font-mono">{formatCurrency(tax)}</span>
-            </div>
-          )}
-
-          {tipAmount > 0 && (
-            <div className="text-muted-foreground flex justify-between">
-              <span>{t("tip")}</span>
-              <span className="font-mono">{formatCurrency(tipAmount)}</span>
             </div>
           )}
 

@@ -22,17 +22,8 @@ const BOLD_ON = cmd(ESC, 0x45, 0x01);          // Bold on
 const BOLD_OFF = cmd(ESC, 0x45, 0x00);         // Bold off
 const ALIGN_CENTER = cmd(ESC, 0x61, 0x01);     // Center align
 const ALIGN_LEFT = cmd(ESC, 0x61, 0x00);       // Left align
-const ALIGN_RIGHT = cmd(ESC, 0x61, 0x02);      // Right align
 const DOUBLE_HEIGHT = cmd(ESC, 0x21, 0x10);    // Double height
 const NORMAL_SIZE = cmd(ESC, 0x21, 0x00);      // Normal size
-
-function padEnd(str: string, length: number): string {
-  return str.padEnd(length).slice(0, length);
-}
-
-function padStart(str: string, length: number): string {
-  return str.padStart(length).slice(-length);
-}
 
 function twoColumns(left: string, right: string, width = 32): Uint8Array {
   const gap = width - left.length - right.length;

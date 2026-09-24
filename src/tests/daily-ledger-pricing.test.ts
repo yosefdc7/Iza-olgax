@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 import {
   calculateLedgerTotals,
   formatLedgerCsvRows,
-  type LedgerItemData,
   type LedgerSaleData,
 } from "@/lib/daily-ledger";
 

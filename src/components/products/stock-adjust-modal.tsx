@@ -48,11 +48,19 @@ export function StockAdjustModal({
       const res = await fetch("/api/stock-adjustments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, quantity: delta, reason, note: note || undefined }),
+        body: JSON.stringify({ productId, delta, quantity: delta, reason, note: note || undefined }),
       });
       if (!res.ok) {
         const d = await res.json();
         throw new Error(d.error ?? "Failed to save adjustment");
+      }
+      const d = await res.json();
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(
+          new CustomEvent("pos:stock-changed", {
+            detail: { lowStockAlerts: d.lowStockAlerts ?? [] },
+          })
+        );
       }
       router.refresh();
       onClose();

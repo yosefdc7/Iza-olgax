@@ -5,15 +5,21 @@ import { prisma } from "@/lib/db";
 import { z } from "zod";
 import { quantityFitsPrecision } from "@/lib/daily-ledger";
 
-const adjustSchema = z.object({
-  productId: z.string(),
-  delta: z
-    .number()
-    .finite()
-    .refine((value) => value !== 0, "Adjustment cannot be zero"),
-  reason: z.enum(["RECEIVED", "DAMAGED", "THEFT", "CORRECTION", "OPENING_COUNT"]),
-  note: z.string().optional(),
-});
+const adjustSchema = z
+  .object({
+    productId: z.string(),
+    delta: z.number().finite().optional(),
+    quantity: z.number().finite().optional(),
+    reason: z.enum(["RECEIVED", "DAMAGED", "THEFT", "CORRECTION", "OPENING_COUNT"]),
+    note: z.string().optional(),
+  })
+  .refine(
+    (data) => {
+      const d = data.delta ?? data.quantity;
+      return typeof d === "number" && d !== 0;
+    },
+    { message: "Adjustment delta cannot be zero", path: ["delta"] }
+  );
 
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -25,7 +31,8 @@ export async function POST(req: NextRequest) {
   const parsed = adjustSchema.safeParse(body);
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { productId, delta, reason, note } = parsed.data;
+  const { productId, reason, note } = parsed.data;
+  const delta = (parsed.data.delta ?? parsed.data.quantity)!;
 
   try {
     const adjustment = await prisma.$transaction(async (tx) => {
@@ -41,14 +48,40 @@ export async function POST(req: NextRequest) {
       const created = await tx.stockAdjustment.create({
         data: { productId, userId: session.user.id, delta, reason, note },
       });
-      await tx.product.update({
+      const updatedProduct = await tx.product.update({
         where: { id: productId },
         data: { stock: { increment: delta } },
+        select: {
+          id: true,
+          name: true,
+          stock: true,
+          lowStockThreshold: true,
+          unit: true,
+        },
       });
-      return created;
+      return { adjustment: created, updatedProduct };
     });
 
-    return NextResponse.json({ adjustment });
+    const currentStock = parseFloat(result.updatedProduct.stock.toString());
+    const threshold = parseFloat(result.updatedProduct.lowStockThreshold.toString());
+    const isBelowThreshold = currentStock <= threshold;
+
+    const lowStockAlert = isBelowThreshold
+      ? {
+          id: result.updatedProduct.id,
+          name: result.updatedProduct.name,
+          stock: currentStock,
+          lowStockThreshold: threshold,
+          unit: result.updatedProduct.unit,
+          isOutOfStock: currentStock <= 0,
+        }
+      : null;
+
+    return NextResponse.json({
+      adjustment: result.adjustment,
+      lowStockAlert,
+      lowStockAlerts: lowStockAlert ? [lowStockAlert] : [],
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Stock adjustment failed";
     if (message === "Product not found")

@@ -27,6 +27,8 @@ import {
   Radio,
   ReceiptText,
 } from "lucide-react";
+import { DashboardStockWarningBanner } from "./dashboard-stock-warning-banner";
+import { AlertsWidget } from "@/components/dashboard/alerts-widget";
 
 type Range = "today" | "week" | "month" | "custom";
 type Tab = "overview" | "lowStock";
@@ -172,11 +174,15 @@ export function ReportsDashboard() {
         fetchData(true);
       }
     };
+    const onStockChanged = () => fetchData(true);
+
     window.addEventListener("focus", onFocus);
-    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("pos:stock-changed", onStockChanged);
     return () => {
       window.removeEventListener("focus", onFocus);
-      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("pos:stock-changed", onStockChanged);
     };
   }, [fetchData]);
 
@@ -360,6 +366,12 @@ export function ReportsDashboard() {
           </button>
         </div>
       )}
+
+      {/* Automated Low Stock Warning Banner on Dashboard */}
+      <DashboardStockWarningBanner
+        items={lowStock}
+        onViewLowStockTab={() => setTab("lowStock")}
+      />
 
       {/* Tab selector with Variant A underline tabs */}
       <div className="border-border/80 flex items-center justify-between border-b print:hidden">
@@ -637,6 +649,9 @@ export function ReportsDashboard() {
               )}
             </div>
           </div>
+
+          {/* Low-Stock Threshold Alerts Widget */}
+          <AlertsWidget variant="dashboard" title="Inventory Stock Alerts" />
 
           {/* Bottom Grid: Top Selling Products & PC #1 Live Sales Stream */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">

@@ -10,6 +10,7 @@ const PRODUCT_SELECT = {
   stock: true,
   unit: true,
   quantityPrecision: true,
+  lowStockThreshold: true,
   sku: true,
   barcode: true,
   category: true,
@@ -42,6 +43,7 @@ type ProductWithPackagings = {
   stock: { toString(): string };
   unit: string;
   quantityPrecision: number;
+  lowStockThreshold: { toString(): string };
   sku: string | null;
   barcode: string | null;
   category: string | null;
@@ -60,6 +62,7 @@ function serializeProduct(p: ProductWithPackagings) {
     ...p,
     price: parseFloat(p.price.toString()),
     stock: parseFloat(p.stock.toString()),
+    lowStockThreshold: parseFloat(p.lowStockThreshold?.toString() ?? "5"),
     packagings: p.packagings.map((pkg) => ({
       ...pkg,
       conversionQty: parseFloat(pkg.conversionQty.toString()),
