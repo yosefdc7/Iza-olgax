@@ -69,9 +69,15 @@ export function RefundModal({ saleId, saleTotal, items, onClose }: RefundModalPr
         quantity: qtys[i.id] ?? i.quantity,
         price: parseFloat(i.price.toString()),
       }));
+      const token = typeof window !== "undefined" ? localStorage.getItem("izah_session_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["x-session-token"] = token;
+      }
       const res = await fetch(`/api/sales/${saleId}/refund`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ reason: reason || undefined, restoreStock, items: refundItems }),
       });
       if (!res.ok) {
@@ -97,8 +103,8 @@ export function RefundModal({ saleId, saleTotal, items, onClose }: RefundModalPr
     }
   }
 
-  return (
-    <>
+  if (showReceipt) {
+    return (
       <RefundReceiptModal
         open={showReceipt}
         onClose={onClose}
@@ -107,8 +113,11 @@ export function RefundModal({ saleId, saleTotal, items, onClose }: RefundModalPr
         refundTotal={committedTotal}
         reason={committedReason || undefined}
       />
+    );
+  }
 
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="w-full max-w-md rounded-xl border bg-background shadow-2xl">
         <div className="flex items-center justify-between border-b px-5 py-4">
           <div className="flex items-center gap-2">
@@ -226,6 +235,5 @@ export function RefundModal({ saleId, saleTotal, items, onClose }: RefundModalPr
         </form>
       </div>
     </div>
-    </>
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { unstable_noStore as noStore } from "next/cache";
 import { getTranslations } from "next-intl/server";
 import { prisma } from "@/lib/db";
+import { serialize } from "@/lib/serialize";
 import { SalesTable } from "@/components/sales/sales-table";
 import { SalesExportButton } from "@/components/sales/sales-export-button";
 import { DbError } from "@/components/ui/db-error";
@@ -20,13 +21,7 @@ export default async function SalesPage() {
       orderBy: { createdAt: "desc" },
       take: 100,
     });
-    sales = raw.map((sale) => ({
-      ...sale,
-      items: sale.items.map((item) => ({
-        ...item,
-        quantity: parseFloat(item.quantity.toString()),
-      })),
-    }));
+    sales = serialize(raw);
   } catch {
     return <DbError page="sales" />;
   }

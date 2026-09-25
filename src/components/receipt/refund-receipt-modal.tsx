@@ -92,7 +92,12 @@ export function RefundReceiptModal({
               <Printer className="h-3.5 w-3.5" />
               Print
             </button>
-            <button onClick={onClose} className="rounded p-1 hover:bg-accent transition-colors">
+            <button
+              onClick={onClose}
+              aria-label="Close refund receipt"
+              data-testid="close-refund-receipt-btn"
+              className="rounded p-1 hover:bg-accent transition-colors cursor-pointer"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>

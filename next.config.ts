@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
       dynamic: 0,
     },
   },
+  serverExternalPackages: [
+    "@electric-sql/pglite",
+    "pglite-prisma-adapter",
+    "@prisma/adapter-pg",
+    "pg",
+  ],
   output: "standalone",
   images: {
     remotePatterns: [

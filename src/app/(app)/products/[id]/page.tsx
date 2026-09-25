@@ -7,6 +7,7 @@ import { serialize } from "@/lib/serialize";
 import { formatCurrency } from "@/lib/utils";
 import { Edit, Package, TrendingUp, TrendingDown } from "lucide-react";
 import { StockAdjustButton } from "@/components/products/stock-adjust-button";
+import { PackagingSection } from "@/components/products/packaging-section";
 import { DbError } from "@/components/ui/db-error";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
 
@@ -31,7 +32,10 @@ export default async function ProductDetailPage({ params }: Props) {
   try {
     const rawProduct = await prisma.product.findUnique({
       where: { id },
-      include: { supplier: { select: { id: true, name: true } } },
+      include: {
+        supplier: { select: { id: true, name: true } },
+        packagings: { orderBy: { createdAt: "asc" } },
+      },
     });
     if (!rawProduct) notFound();
     product = serialize(rawProduct);
@@ -136,6 +140,9 @@ export default async function ProductDetailPage({ params }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Packaging Sizes */}
+      <PackagingSection productId={product.id} initialPackagings={product.packagings ?? []} />
 
       {/* Inventory Log */}
       <div className="rounded-lg border bg-card overflow-hidden">

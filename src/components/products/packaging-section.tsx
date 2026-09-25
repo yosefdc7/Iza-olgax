@@ -204,7 +204,7 @@ export function PackagingSection({ productId, initialPackagings }: PackagingSect
                       id: pkg.id,
                       name: pkg.name,
                       conversionQty: pkg.conversionQty,
-                      price: pkg.price,
+                      price: Number(pkg.price),
                       barcode: pkg.barcode ?? undefined,
                     }}
                     onSave={(values) => handleEdit(pkg.id, values)}
@@ -215,7 +215,7 @@ export function PackagingSection({ productId, initialPackagings }: PackagingSect
                 <div className="grid grid-cols-[1fr_80px_100px_120px_60px] gap-2 items-center px-3 py-2 text-sm">
                   <span className="font-medium">{pkg.name}</span>
                   <span className="text-muted-foreground">{pkg.conversionQty}×</span>
-                  <span>₱{pkg.price.toFixed(2)}</span>
+                  <span>₱{Number(pkg.price).toFixed(2)}</span>
                   <span className="text-muted-foreground truncate">{pkg.barcode ?? "—"}</span>
                   <div className="flex gap-1">
                     <button

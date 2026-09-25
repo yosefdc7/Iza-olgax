@@ -168,8 +168,12 @@ export default function LoginPage() {
           if (token) {
             try {
               localStorage.setItem("izah_session_token", token);
-              document.cookie = `izah_session_token=${encodeURIComponent(token)}; Path=/; Max-Age=604800; SameSite=None; Secure`;
-              document.cookie = `better-auth.session_token=${encodeURIComponent(token)}; Path=/; Max-Age=604800; SameSite=None; Secure`;
+              const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+              const cookieFlags = isHttps
+                ? "; Path=/; Max-Age=604800; SameSite=None; Secure"
+                : "; Path=/; Max-Age=604800; SameSite=Lax";
+              document.cookie = `izah_session_token=${encodeURIComponent(token)}${cookieFlags}`;
+              document.cookie = `better-auth.session_token=${encodeURIComponent(token)}${cookieFlags}`;
             } catch {}
           }
           const searchParams = new URLSearchParams(window.location.search);

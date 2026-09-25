@@ -9,7 +9,8 @@ const STATIC_PRECACHE = [
   "/",
   "/pos",
   "/manifest.json",
-  "/icons/icon.svg",
+  "/favicon.ico",
+  "/android-chrome-192x192.png",
 ];
 
 // ── Install: pre-cache the app shell ────────────────────────────────────────

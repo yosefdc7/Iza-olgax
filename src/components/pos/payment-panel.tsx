@@ -226,10 +226,16 @@ export function PaymentPanel({
       }
 
       let res: Response;
+      const token = typeof window !== "undefined" ? localStorage.getItem("izah_session_token") : null;
+      const reqHeaders: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        reqHeaders["Authorization"] = `Bearer ${token}`;
+        reqHeaders["x-session-token"] = token;
+      }
       try {
         res = await fetch("/api/sales", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: reqHeaders,
           body: JSON.stringify(body),
         });
       } catch (networkError) {
@@ -279,14 +285,28 @@ export function PaymentPanel({
     if (isEmpty) return;
     setHoldLoading(true);
     try {
-      const res = await fetch("/api/held-orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          cartSnapshot: { items, paymentMethod, amountTendered },
-          label: `Hold ${new Date().toLocaleTimeString()}`,
-        }),
+      const token = typeof window !== "undefined" ? localStorage.getItem("izah_session_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["x-session-token"] = token;
+      }
+      const payload = JSON.stringify({
+        cartSnapshot: { items, paymentMethod, amountTendered },
+        label: `Hold ${new Date().toLocaleTimeString()}`,
       });
+      let res = await fetch("/api/held-orders", {
+        method: "POST",
+        headers,
+        body: payload,
+      });
+      if (!res.ok) {
+        res = await fetch("/api/held-orders", {
+          method: "POST",
+          headers,
+          body: payload,
+        });
+      }
       if (res.ok) {
         clearCart();
       }
@@ -525,6 +545,7 @@ export function PaymentPanel({
                     value={splitInput[method]}
                     onChange={(e) => handleSplitInput(method, e.target.value)}
                     placeholder="0.00"
+                    data-testid={`split-input-${method.toLowerCase()}`}
                     className="bg-background focus:ring-ring flex-1 rounded-md border px-2 py-1.5 text-xs focus:ring-2 focus:outline-none"
                   />
                   {line && (
@@ -597,6 +618,7 @@ export function PaymentPanel({
                   value={amountTendered || ""}
                   onChange={(e) => setAmountTendered(parseFloat(e.target.value) || 0)}
                   placeholder={formatCurrency(tot)}
+                  data-testid="tendered-input"
                   className="border-input bg-background focus:ring-ring flex h-9 w-full rounded-md border px-3 py-1.5 text-sm font-mono outline-none focus:ring-2"
                 />
               </div>

@@ -64,6 +64,8 @@ next-env.d.ts
 *.db-journal
 prisma/schema.sql
 prisma/seed.sql
+/.data/
+/scratch/
 
 
 # Local Netlify folder

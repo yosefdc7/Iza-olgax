@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "@/lib/session-auth";
+import { headers } from "next/headers";
+import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { packagingFormSchema } from "@/lib/validations/product";
 
@@ -9,7 +10,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const session = await getServerSession();
+  const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const packagings = await db.productPackaging.findMany({
@@ -26,13 +27,19 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const session = await getServerSession();
+  const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (session.user.role !== "ADMIN") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const body = await req.json();
+  let body: any = {};
+  try {
+    const text = await req.text();
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = {};
+  }
   const parsed = packagingFormSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

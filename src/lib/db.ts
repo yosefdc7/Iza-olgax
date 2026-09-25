@@ -1,5 +1,15 @@
 import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
+import { PGlite } from "@electric-sql/pglite";
+import { PrismaPGlite } from "pglite-prisma-adapter";
+import path from "node:path";
+import fs from "node:fs";
+
+function hasPostgresConfig(): boolean {
+  if (process.env.SQL_USER && process.env.SQL_HOST) return true;
+  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes("<password>")) return true;
+  return false;
+}
 
 function getPgConfig() {
   if (process.env.SQL_USER && process.env.SQL_HOST) {
@@ -18,7 +28,23 @@ function getPgConfig() {
 
 function createPrismaClient(): PrismaClient {
   try {
-    const adapter = new PrismaPg(getPgConfig());
+    if (hasPostgresConfig()) {
+      const adapter = new PrismaPg(getPgConfig());
+      return new PrismaClient({
+        adapter,
+        log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+      });
+    }
+
+    const dbDir = path.resolve(process.cwd(), ".data/pglite");
+    const pidFile = path.join(dbDir, "postmaster.pid");
+    if (fs.existsSync(pidFile)) {
+      try {
+        fs.unlinkSync(pidFile);
+      } catch {}
+    }
+    const pglite = new PGlite(dbDir);
+    const adapter = new PrismaPGlite(pglite);
     return new PrismaClient({
       adapter,
       log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
@@ -44,5 +70,6 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const db = prisma;
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;

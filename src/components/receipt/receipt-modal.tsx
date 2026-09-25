@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useEffect } from "react";
 import { X, Printer } from "lucide-react";
 import { Receipt } from "./receipt";
 import { printReceipt } from "@/lib/thermal-print";
@@ -41,6 +41,16 @@ interface ReceiptModalProps {
 export function ReceiptModal({ open, onClose, data, settings }: ReceiptModalProps) {
   const printRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    if (open) {
+      window.addEventListener("keydown", handleKeyDown);
+      return () => window.removeEventListener("keydown", handleKeyDown);
+    }
+  }, [open, onClose]);
+
   if (!open) return null;
 
   function handleBrowserPrint() {
@@ -52,7 +62,12 @@ export function ReceiptModal({ open, onClose, data, settings }: ReceiptModalProp
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       {/* Print styles: when printing, only show receipt */}
       <style>{`
         @media print {
@@ -82,7 +97,7 @@ export function ReceiptModal({ open, onClose, data, settings }: ReceiptModalProp
               <Printer className="h-3.5 w-3.5" />
               Print
             </button>
-            <button onClick={onClose} className="rounded p-1 hover:bg-accent transition-colors">
+            <button onClick={onClose} aria-label="Close receipt" data-testid="close-receipt-btn" className="rounded p-1 hover:bg-accent transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>

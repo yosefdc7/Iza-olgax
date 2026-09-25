@@ -17,11 +17,18 @@ export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const body = await req.json();
+  let body: any = {};
+  try {
+    const text = await req.text();
+    body = text ? JSON.parse(text) : {};
+  } catch {
+    body = {};
+  }
+
   const order = await prisma.heldOrder.create({
     data: {
       label: body.label ?? null,
-      cartSnapshot: body.cartSnapshot,
+      cartSnapshot: body.cartSnapshot ?? {},
     },
   });
   return NextResponse.json(order, { status: 201 });
@@ -31,7 +38,17 @@ export async function DELETE(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { id } = await req.json();
-  await prisma.heldOrder.delete({ where: { id } });
+  let id: string | undefined;
+  try {
+    const text = await req.text();
+    const data = text ? JSON.parse(text) : {};
+    id = data.id;
+  } catch {
+    id = undefined;
+  }
+
+  if (id) {
+    await prisma.heldOrder.delete({ where: { id } }).catch(() => {});
+  }
   return NextResponse.json({ ok: true });
 }

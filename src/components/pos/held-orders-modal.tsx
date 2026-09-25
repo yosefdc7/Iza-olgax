@@ -29,10 +29,23 @@ export function HeldOrdersModal({ open, onClose }: HeldOrdersModalProps) {
 
   async function fetchOrders() {
     setLoading(true);
-    const res = await fetch("/api/held-orders");
-    const data = await res.json();
-    setOrders(data);
-    setLoading(false);
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("izah_session_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["Authorization"] = `Bearer ${token}`;
+        headers["x-session-token"] = token;
+      }
+      const res = await fetch("/api/held-orders", { headers });
+      const data = await res.json().catch(() => []);
+      if (Array.isArray(data)) {
+        setOrders(data);
+      }
+    } catch {
+      setOrders([]);
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Fetch when modal opens; reset when it closes
@@ -52,18 +65,30 @@ export function HeldOrdersModal({ open, onClose }: HeldOrdersModalProps) {
     setDiscount(snap.discountAmount, snap.discountType);
     setPaymentMethod(snap.paymentMethod);
     // Delete from server
+    const token = typeof window !== "undefined" ? localStorage.getItem("izah_session_token") : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-session-token"] = token;
+    }
     await fetch("/api/held-orders", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ id: order.id }),
     });
     onClose();
   }
 
   async function deleteOrder(id: string) {
+    const token = typeof window !== "undefined" ? localStorage.getItem("izah_session_token") : null;
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+      headers["x-session-token"] = token;
+    }
     await fetch("/api/held-orders", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify({ id }),
     });
     setOrders((prev) => prev.filter((o) => o.id !== id));

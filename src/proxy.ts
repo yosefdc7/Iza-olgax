@@ -200,16 +200,19 @@ export function proxy(request: NextRequest) {
   });
 
   if (activeToken) {
+    const isHttps = request.nextUrl.protocol === "https:";
     const cookieOpts = {
       httpOnly: true,
-      secure: true,
-      sameSite: "none" as const,
+      secure: isHttps,
+      sameSite: (isHttps ? "none" : "lax") as "none" | "lax",
       path: "/",
       maxAge: 60 * 60 * 24 * 7,
     };
     response.cookies.set("izah_session_token", activeToken, cookieOpts);
     response.cookies.set("better-auth.session_token", activeToken, cookieOpts);
-    response.cookies.set("__Secure-better-auth.session_token", activeToken, cookieOpts);
+    if (isHttps) {
+      response.cookies.set("__Secure-better-auth.session_token", activeToken, cookieOpts);
+    }
   }
 
   return applyCorsHeaders(response, origin, isAllowedOrigin);
