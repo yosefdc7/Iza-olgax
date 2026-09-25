@@ -1,10 +1,12 @@
 # CURRENT.md
 
 ## Objective
-Implement and verify comprehensive Playwright browser-based end-to-end (E2E) testing across the complete store lifecycle: adding/editing/packaging units in catalog, selling at POS with Company Receipt series (211 vs CHB) and DR/SI tracking, deleting (cart void, hold/discard, catalog delete, sales refund with stock restock), and daily ledger report generation.
+Implement and verify:
+1. Comprehensive Playwright browser-based end-to-end (E2E) testing across the complete store lifecycle.
+2. Product page stock adjustment history print feature with browser-based PDF report generation and audit sign-off.
 
 ## Status
-**100% of Playwright E2E browser test specifications and 168/168 unit tests passed with 0 failures.**
+**Completed product stock adjustment history print feature and comprehensive test suite.**
 
 ## Completed
 - [x] **Unified Full-Day Store Lifecycle Spec (`src/tests/e2e/lifecycle-store-journey.spec.ts`)**:
